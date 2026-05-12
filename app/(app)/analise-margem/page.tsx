@@ -70,7 +70,7 @@ export default async function AnaliseMargemPage({
   const { daily, totals } = await getMarginAnalysis(from, to);
 
   return (
-    <div className="mx-auto flex max-w-[1400px] flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <PageHeader
           title="Análise de Margem"
@@ -148,7 +148,7 @@ export default async function AnaliseMargemPage({
           </p>
         </div>
 
-        <div className="overflow-x-auto">
+        <div>
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-border-subtle text-left">
