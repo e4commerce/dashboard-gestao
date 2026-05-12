@@ -135,14 +135,8 @@ export default async function MarketingPage({
                 <th className="pb-2 pr-3 text-right font-medium text-fg-muted">
                   Google
                 </th>
-                <th className="pb-2 pr-3 text-right font-medium text-fg-muted">
-                  Total
-                </th>
-                <th className="pb-2 pr-3 text-right font-medium text-fg-muted">
-                  Cliques
-                </th>
                 <th className="pb-2 text-right font-medium text-fg-muted">
-                  Impressões
+                  Total
                 </th>
               </tr>
             </thead>
@@ -158,24 +152,14 @@ export default async function MarketingPage({
                   <td className="py-2 pr-3 text-right tabular-nums text-fg-secondary">
                     {p.google.spend > 0 ? formatBRL(p.google.spend) : "—"}
                   </td>
-                  <td className="py-2 pr-3 text-right tabular-nums font-medium text-fg-primary">
+                  <td className="py-2 text-right tabular-nums font-medium text-fg-primary">
                     {p.total.spend > 0 ? formatBRL(p.total.spend) : "—"}
-                  </td>
-                  <td className="py-2 pr-3 text-right tabular-nums text-fg-secondary">
-                    {p.total.clicks > 0
-                      ? p.total.clicks.toLocaleString("pt-BR")
-                      : "—"}
-                  </td>
-                  <td className="py-2 text-right tabular-nums text-fg-secondary">
-                    {p.total.impressions > 0
-                      ? p.total.impressions.toLocaleString("pt-BR")
-                      : "—"}
                   </td>
                 </tr>
               ))}
               {daily.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-6 text-center text-fg-muted">
+                  <td colSpan={4} className="py-6 text-center text-fg-muted">
                     Nenhum dado recebido ainda.
                   </td>
                 </tr>
@@ -191,18 +175,8 @@ export default async function MarketingPage({
                   <td className="pt-3 pr-3 text-right tabular-nums text-fg-primary">
                     {formatBRL(summary.byPlatform.google)}
                   </td>
-                  <td className="pt-3 pr-3 text-right tabular-nums text-fg-primary">
-                    {formatBRL(summary.totalSpend)}
-                  </td>
-                  <td className="pt-3 pr-3 text-right tabular-nums text-fg-primary">
-                    {daily
-                      .reduce((s, p) => s + p.total.clicks, 0)
-                      .toLocaleString("pt-BR")}
-                  </td>
                   <td className="pt-3 text-right tabular-nums text-fg-primary">
-                    {daily
-                      .reduce((s, p) => s + p.total.impressions, 0)
-                      .toLocaleString("pt-BR")}
+                    {formatBRL(summary.totalSpend)}
                   </td>
                 </tr>
               </tfoot>
