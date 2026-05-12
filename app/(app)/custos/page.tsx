@@ -146,6 +146,9 @@ function CogsSyncHistory({
     dateTo: Date | string;
     matched: number;
     cleared: number;
+    totalDsersOrders: number | null;
+    ourOrdersInRange: number | null;
+    unmatchedSample: string | null;
     executionTimeMs: number | null;
     errorMessage: string | null;
   }>;
@@ -167,6 +170,9 @@ function CogsSyncHistory({
               <th className="pb-2 pr-4 font-medium text-fg-muted">Iniciado</th>
               <th className="pb-2 pr-4 font-medium text-fg-muted">Status</th>
               <th className="pb-2 pr-4 text-right font-medium text-fg-muted">
+                DSers / Nossos
+              </th>
+              <th className="pb-2 pr-4 text-right font-medium text-fg-muted">
                 Confirmados
               </th>
               <th className="pb-2 pr-4 text-right font-medium text-fg-muted">
@@ -180,34 +186,53 @@ function CogsSyncHistory({
           <tbody className="divide-y divide-border-subtle">
             {logs.length === 0 ? (
               <tr>
-                <td colSpan={5} className="py-6 text-center text-fg-muted">
+                <td colSpan={6} className="py-6 text-center text-fg-muted">
                   Nenhuma sincronização registrada ainda.
                 </td>
               </tr>
             ) : (
-              logs.map((log) => (
-                <tr key={log.id}>
-                  <td className="py-2.5 pr-4 text-fg-secondary">
-                    {fmtDateTime(log.startedAt)}
-                  </td>
-                  <td
-                    className={`py-2.5 pr-4 font-medium ${SYNC_STATUS_STYLES[log.status] ?? "text-fg-muted"}`}
-                  >
-                    {log.status}
-                  </td>
-                  <td className="py-2.5 pr-4 text-right tabular-nums text-status-success">
-                    {log.matched}
-                  </td>
-                  <td className="py-2.5 pr-4 text-right tabular-nums text-fg-muted">
-                    {log.cleared}
-                  </td>
-                  <td className="py-2.5 text-right tabular-nums text-fg-secondary">
-                    {log.executionTimeMs
-                      ? `${(log.executionTimeMs / 1000).toFixed(1)}s`
-                      : "—"}
-                  </td>
-                </tr>
-              ))
+              logs.map((log) => {
+                const sample: string[] = log.unmatchedSample
+                  ? (() => { try { return JSON.parse(log.unmatchedSample) as string[]; } catch { return []; } })()
+                  : [];
+                const nameMismatch = log.matched === 0 && (log.totalDsersOrders ?? 0) > 0;
+                return (
+                  <>
+                    <tr key={log.id} className="align-top">
+                      <td className="py-2.5 pr-4 text-fg-secondary">
+                        {fmtDateTime(log.startedAt)}
+                      </td>
+                      <td
+                        className={`py-2.5 pr-4 font-medium ${SYNC_STATUS_STYLES[log.status] ?? "text-fg-muted"}`}
+                      >
+                        {log.status}
+                      </td>
+                      <td className="py-2.5 pr-4 text-right tabular-nums text-fg-secondary">
+                        {log.totalDsersOrders ?? "—"} / {log.ourOrdersInRange ?? "—"}
+                      </td>
+                      <td className="py-2.5 pr-4 text-right tabular-nums text-status-success">
+                        {log.matched}
+                      </td>
+                      <td className="py-2.5 pr-4 text-right tabular-nums text-fg-muted">
+                        {log.cleared}
+                      </td>
+                      <td className="py-2.5 text-right tabular-nums text-fg-secondary">
+                        {log.executionTimeMs
+                          ? `${(log.executionTimeMs / 1000).toFixed(1)}s`
+                          : "—"}
+                      </td>
+                    </tr>
+                    {nameMismatch && sample.length > 0 ? (
+                      <tr key={`${log.id}-warn`}>
+                        <td colSpan={6} className="pb-2.5 text-[11px] text-status-warning">
+                          ⚠ DSers retornou pedidos mas nenhum casou com o Shopify. Amostra de nomes do DSers:{" "}
+                          <span className="font-mono">{sample.slice(0, 5).join(", ")}</span>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </>
+                );
+              })
             )}
           </tbody>
         </table>

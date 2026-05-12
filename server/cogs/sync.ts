@@ -93,19 +93,15 @@ export async function syncCogs(
   const ourOrdersWithName = ourOrders.filter((o) => o.orderName).length;
   const now = new Date();
 
-  // Guard contra apagamento massivo: só limpamos COGS antigo se confiamos que
-  // a resposta do DSers é completa. Caso contrário (API vazia, chunks
-  // falhando), mantemos os dados existentes — vale mais ter estimativa
-  // desatualizada do que zero dado.
   const dsersReturnedData = dsersOrders.length > 0;
   const allChunksOk = failedChunks.length === 0;
-  const canTrustNotConfirmed = dsersReturnedData && allChunksOk;
 
   // Conjunto dos nomes que casaram para identificar os "unmatched do DSers"
   const matchedNames = new Set<string>();
+  // IDs de pedidos que tinham COGS mas o DSers não confirmou — candidatos a limpar
+  const toClear: number[] = [];
 
   let matched = 0;
-  let cleared = 0;
 
   for (const o of ourOrders) {
     if (!o.orderName) continue;
@@ -124,9 +120,21 @@ export async function syncCogs(
         .where(eq(orders.id, o.id));
       matched++;
       matchedNames.add(norm);
-    } else if (o.cogsAmount !== null && canTrustNotConfirmed) {
-      // Tinha COGS mas DSers não confirma (e API respondeu completa)
-      // → limpa por ser dado não-confiável
+    } else if (o.cogsAmount !== null && dsersReturnedData && allChunksOk) {
+      toClear.push(o.id);
+    }
+  }
+
+  // Guard duplo: só limpamos COGS existente se:
+  //   1. DSers respondeu sem falhas (dsersReturnedData && allChunksOk)
+  //   2. Pelo menos 1 pedido foi confirmado (matched > 0)
+  //
+  // matched = 0 com DSers retornando pedidos quase sempre indica divergência
+  // de formato nos nomes (ex: Profitfy retorna "1234" mas Shopify tem "#1234").
+  // Limpar nesse cenário apagaria dados válidos sem justificativa.
+  let cleared = 0;
+  if (matched > 0 && toClear.length > 0) {
+    for (const id of toClear) {
       await db
         .update(orders)
         .set({
@@ -134,7 +142,7 @@ export async function syncCogs(
           cogsSource: null,
           cogsUpdatedAt: null,
         })
-        .where(eq(orders.id, o.id));
+        .where(eq(orders.id, id));
       cleared++;
     }
   }

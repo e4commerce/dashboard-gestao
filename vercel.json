@@ -1,6 +1,8 @@
 {
   "crons": [
-    { "path": "/api/cron/extract", "schedule": "0 3 * * *" },
+    { "path": "/api/cron/extract", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/sync-meta", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/sync-mp", "schedule": "*/5 * * * *" },
     { "path": "/api/cron/refresh-costs?days=30", "schedule": "30 3 * * *" }
   ]
 }
