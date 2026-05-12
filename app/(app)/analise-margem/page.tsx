@@ -91,7 +91,7 @@ export default async function AnaliseMargemPage({
         <StatCard
           label="Faturamento"
           value={formatBRL(totals.faturamento)}
-          sub="Pedidos válidos"
+          sub="Pedidos válidos com COGS sincronizado"
         />
         <StatCard
           label="Lucro performance"
@@ -159,8 +159,9 @@ export default async function AnaliseMargemPage({
             Lucro diário
           </h3>
           <p className="text-xs text-fg-muted">
-            Performance = sem custos de pedidos inválidos · Operacional = com
-            custos de troca, voucher, reenvio e zerados
+            Faturamento conta apenas pedidos com COGS sincronizado · Performance
+            = sem custos de pedidos inválidos · Operacional = com custos de
+            troca, voucher, reenvio e zerados
           </p>
         </div>
 

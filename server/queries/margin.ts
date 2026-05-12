@@ -9,7 +9,7 @@ export const CHECKOUT_FEE_RATE = 0.01;  // taxa de checkout
 
 export type DailyMarginPoint = {
   date: string;
-  faturamento: number;          // receita dos pedidos válidos
+  faturamento: number;          // receita dos pedidos válidos com COGS sincronizado
   cogsValid: number;            // custo de produto (pedidos válidos sincronizados)
   cogsInvalid: number;          // custo operacional (troca/voucher/reenvio/zerado)
   cogsCoveragePct: number;      // cobertura DSers nos pedidos válidos
@@ -90,8 +90,10 @@ export async function getMarginAnalysis(
     });
   }
 
+  // Faturamento conta apenas pedidos com COGS sincronizado — assim o lucro
+  // pareia receita e custo de produto reais. Cobertura DSers indica o gap.
   const daily: DailyMarginPoint[] = costs.map((c) => {
-    const faturamento = c.validRevenueTotal;
+    const faturamento = c.validRevenue;
     const cogsValid = c.validCogs;
     const cogsInvalid = c.invalidCogs;
     const ad = adByDate.get(c.date) ?? { total: 0, metaGross: 0, google: 0 };
