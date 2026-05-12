@@ -1,0 +1,141 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  /* Tipografia (escala do design system) */
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 24px;
+  --text-3xl: 32px;
+
+  /* Raios (do DS) */
+  --radius: 8px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-3xl: 20px;
+  --radius-4xl: 24px;
+
+  /* Mapeamento shadcn → tokens do DS */
+  --color-background: var(--surface-page);
+  --color-foreground: var(--text-primary);
+  --color-card: var(--surface-card);
+  --color-card-foreground: var(--text-primary);
+  --color-popover: var(--surface-elevated);
+  --color-popover-foreground: var(--text-primary);
+  --color-primary: var(--action-primary);
+  --color-primary-foreground: var(--text-on-dark);
+  --color-secondary: var(--surface-card);
+  --color-secondary-foreground: var(--text-secondary);
+  --color-muted: var(--surface-elevated);
+  --color-muted-foreground: var(--text-muted);
+  --color-accent: var(--surface-card-hover);
+  --color-accent-foreground: var(--text-primary);
+  --color-destructive: var(--status-error);
+  --color-border: var(--border-default);
+  --color-input: var(--surface-input);
+  --color-ring: var(--action-primary);
+
+  /* Tokens semânticos do DS expostos como utilitários Tailwind */
+  --color-fg-primary: var(--text-primary);
+  --color-fg-secondary: var(--text-secondary);
+  --color-fg-muted: var(--text-muted);
+  --color-fg-on-dark: var(--text-on-dark);
+  --color-text-link: var(--text-link);
+
+  --color-surface-page: var(--surface-page);
+  --color-surface-sidebar: var(--surface-sidebar);
+  --color-surface-card: var(--surface-card);
+  --color-surface-card-hover: var(--surface-card-hover);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-surface-input: var(--surface-input);
+
+  --color-action-primary: var(--action-primary);
+  --color-action-primary-hover: var(--action-primary-hover);
+  --color-action-personalize: var(--action-personalize);
+  --color-action-ghost-active: var(--action-ghost-active);
+
+  --color-border-default: var(--border-default);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-focus: var(--border-focus);
+
+  --color-status-error: var(--status-error);
+  --color-status-success: var(--status-success);
+  --color-status-success-muted: var(--status-success-muted);
+  --color-status-warning: var(--status-warning);
+  --color-status-info: var(--status-info);
+
+  /* Sombras do DS */
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.30);
+  --shadow-md: 0 4px 8px rgb(0 0 0 / 0.40);
+  --shadow-lg: 0 8px 24px rgb(0 0 0 / 0.50);
+  --shadow-focus: 0 0 0 2px rgb(69 115 210 / 0.50);
+
+  /* Cores de chart (DS) */
+  --color-chart-1: var(--status-success);
+  --color-chart-2: var(--status-warning);
+  --color-chart-3: var(--status-info);
+  --color-chart-4: var(--text-link);
+  --color-chart-5: var(--text-muted);
+}
+
+:root,
+.dark {
+  /* Texto */
+  --text-primary: #F5F5F5;
+  --text-secondary: #C4C4C4;
+  --text-muted: #8B8B8B;
+  --text-on-dark: #FFFFFF;
+  --text-link: #4FC3F7;
+
+  /* Superfícies */
+  --surface-page: #1E1E1E;
+  --surface-sidebar: #1A1A1A;
+  --surface-card: #252525;
+  --surface-card-hover: #2D2D2D;
+  --surface-elevated: #2A2A2A;
+  --surface-input: #2D2D2D;
+
+  /* Ações */
+  --action-primary: #4573D2;
+  --action-primary-hover: #3A65BF;
+  --action-personalize: #F46036;
+  --action-ghost-active: #2D2D2D;
+
+  /* Bordas */
+  --border-default: #3A3A3A;
+  --border-subtle: #2A2A2A;
+  --border-focus: #4573D2;
+
+  /* Status */
+  --status-error: #E57373;
+  --status-success: #4CAF50;
+  --status-success-muted: rgb(76 175 80 / 0.15);
+  --status-warning: #FFB74D;
+  --status-info: #42A5F5;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "ss01", "cv11";
+  }
+}
