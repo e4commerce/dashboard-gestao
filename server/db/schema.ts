@@ -260,6 +260,23 @@ export const adsInsights = pgTable(
   ],
 );
 
+// Contas Meta Ads descobertas via /me/adaccounts.
+// O campo `enabled` é controlado pelo usuário na UI e decide quais contas
+// participam do sync.
+export const metaAdAccounts = pgTable("meta_ad_accounts", {
+  id: varchar("id", { length: 64 }).primaryKey(), // formato "act_X"
+  name: varchar("name", { length: 255 }).notNull(),
+  currency: varchar("currency", { length: 8 }),
+  accountStatus: integer("account_status"),
+  enabled: boolean("enabled").notNull().default(false),
+  discoveredAt: timestamp("discovered_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 // Cache de tokens OAuth para integrações externas que precisam refresh.
 // Necessário porque cache in-memory não persiste entre invocações serverless.
 export const serviceTokens = pgTable("service_tokens", {
@@ -281,4 +298,5 @@ export type DailyWeight = typeof dailyWeights.$inferSelect;
 export type ExtractionLog = typeof extractionLogs.$inferSelect;
 export type CogsSyncLog = typeof cogsSyncLogs.$inferSelect;
 export type AdsInsight = typeof adsInsights.$inferSelect;
+export type MetaAdAccount = typeof metaAdAccounts.$inferSelect;
 export type ServiceToken = typeof serviceTokens.$inferSelect;

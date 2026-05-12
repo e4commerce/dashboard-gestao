@@ -1,6 +1,9 @@
+import Link from "next/link";
+import { Settings } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { MonthPicker } from "@/components/month-picker";
 import { RefreshDataButton } from "./refresh-button";
+import { SyncMetaButton } from "./sync-meta-button";
 import { getDailyAdSpend, getAdsSummary } from "@/server/queries/ads";
 import {
   parseMonthKey,
@@ -34,7 +37,7 @@ function StatCard({
 }
 
 function fmtLastSync(d: Date | null): string {
-  if (!d) return "Nunca sincronizado";
+  if (!d) return "nunca";
   const diff = Date.now() - d.getTime();
   const min = Math.floor(diff / 60_000);
   if (min < 1) return "agora mesmo";
@@ -60,33 +63,43 @@ export default async function MarketingPage({
     getAdsSummary(from, to),
   ]);
 
-  const hasAnyData = summary.lastSyncAt !== null;
+  const hasGoogle = summary.lastSyncByPlatform.google !== null;
+  const hasMeta = summary.lastSyncByPlatform.meta !== null;
 
   return (
-    <div className="mx-auto flex max-w-[1100px] flex-col gap-6">
+    <div className="mx-auto flex max-w-[1200px] flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <PageHeader
           title="Marketing"
-          subtitle={`Google Ads · Última coleta: ${fmtLastSync(summary.lastSyncAt)}`}
+          subtitle={`Google: ${fmtLastSync(summary.lastSyncByPlatform.google)} · Meta: ${fmtLastSync(summary.lastSyncByPlatform.meta)}`}
         />
         <div className="flex items-center gap-3">
           <MonthPicker month={month} />
+          <Link
+            href="/marketing/contas"
+            title="Configurar quais contas Meta sincronizar"
+            className="flex items-center gap-2 rounded-md border border-border-default bg-surface-card px-3 py-2 text-xs font-medium text-fg-secondary transition-colors hover:bg-surface-card-hover hover:text-fg-primary"
+          >
+            <Settings className="size-3.5" strokeWidth={2.25} />
+            Contas Meta
+          </Link>
+          <SyncMetaButton month={month} />
           <RefreshDataButton />
         </div>
       </div>
 
-      {!hasAnyData ? <ScriptSetupCard /> : null}
+      {!hasGoogle && !hasMeta ? <ScriptSetupCard /> : null}
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatCard
           label="Investimento total"
           value={formatBRL(summary.totalSpend)}
-          sub={`${summary.daysWithSpend} dia(s) com gasto`}
+          sub={`Meta ${formatBRL(summary.byPlatform.meta)} · Google ${formatBRL(summary.byPlatform.google)}`}
         />
         <StatCard
           label="Média diária"
           value={formatBRL(summary.avgDailySpend)}
-          sub="apenas dias com gasto"
+          sub={`${summary.daysWithSpend} dia(s) com gasto`}
         />
         <StatCard
           label="Pico do mês"
@@ -107,18 +120,9 @@ export default async function MarketingPage({
               Investimento diário
             </h3>
             <p className="text-xs text-fg-muted">
-              Dados recebidos via Google Ads Script
+              Meta via Graph API · Google via Google Ads Script
             </p>
           </div>
-          {hasAnyData ? (
-            <button
-              type="button"
-              className="text-[11px] text-fg-muted hover:text-fg-primary"
-              title="Mostrar instruções de setup do script"
-            >
-              {/* Placeholder pra futura expansão (toggle ScriptSetupCard) */}
-            </button>
-          ) : null}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
@@ -126,7 +130,13 @@ export default async function MarketingPage({
               <tr className="border-b border-border-subtle text-left">
                 <th className="pb-2 pr-3 font-medium text-fg-muted">Data</th>
                 <th className="pb-2 pr-3 text-right font-medium text-fg-muted">
-                  Investimento
+                  Meta
+                </th>
+                <th className="pb-2 pr-3 text-right font-medium text-fg-muted">
+                  Google
+                </th>
+                <th className="pb-2 pr-3 text-right font-medium text-fg-muted">
+                  Total
                 </th>
                 <th className="pb-2 pr-3 text-right font-medium text-fg-muted">
                   Cliques
@@ -143,23 +153,30 @@ export default async function MarketingPage({
                     {formatDateLabel(p.date)}
                   </td>
                   <td className="py-2 pr-3 text-right tabular-nums text-fg-secondary">
-                    {p.spend > 0 ? formatBRL(p.spend) : "—"}
+                    {p.meta.spend > 0 ? formatBRL(p.meta.spend) : "—"}
                   </td>
                   <td className="py-2 pr-3 text-right tabular-nums text-fg-secondary">
-                    {p.clicks > 0 ? p.clicks.toLocaleString("pt-BR") : "—"}
+                    {p.google.spend > 0 ? formatBRL(p.google.spend) : "—"}
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums font-medium text-fg-primary">
+                    {p.total.spend > 0 ? formatBRL(p.total.spend) : "—"}
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums text-fg-secondary">
+                    {p.total.clicks > 0
+                      ? p.total.clicks.toLocaleString("pt-BR")
+                      : "—"}
                   </td>
                   <td className="py-2 text-right tabular-nums text-fg-secondary">
-                    {p.impressions > 0
-                      ? p.impressions.toLocaleString("pt-BR")
+                    {p.total.impressions > 0
+                      ? p.total.impressions.toLocaleString("pt-BR")
                       : "—"}
                   </td>
                 </tr>
               ))}
               {daily.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-6 text-center text-fg-muted">
-                    Nenhum dado recebido. Configure o Google Ads Script para
-                    começar a enviar.
+                  <td colSpan={6} className="py-6 text-center text-fg-muted">
+                    Nenhum dado recebido ainda.
                   </td>
                 </tr>
               ) : null}
@@ -169,16 +186,22 @@ export default async function MarketingPage({
                 <tr className="border-t border-border-default font-semibold">
                   <td className="pt-3 pr-3 text-fg-primary">Total</td>
                   <td className="pt-3 pr-3 text-right tabular-nums text-fg-primary">
+                    {formatBRL(summary.byPlatform.meta)}
+                  </td>
+                  <td className="pt-3 pr-3 text-right tabular-nums text-fg-primary">
+                    {formatBRL(summary.byPlatform.google)}
+                  </td>
+                  <td className="pt-3 pr-3 text-right tabular-nums text-fg-primary">
                     {formatBRL(summary.totalSpend)}
                   </td>
                   <td className="pt-3 pr-3 text-right tabular-nums text-fg-primary">
                     {daily
-                      .reduce((s, p) => s + p.clicks, 0)
+                      .reduce((s, p) => s + p.total.clicks, 0)
                       .toLocaleString("pt-BR")}
                   </td>
                   <td className="pt-3 text-right tabular-nums text-fg-primary">
                     {daily
-                      .reduce((s, p) => s + p.impressions, 0)
+                      .reduce((s, p) => s + p.total.impressions, 0)
                       .toLocaleString("pt-BR")}
                   </td>
                 </tr>
@@ -188,7 +211,7 @@ export default async function MarketingPage({
         </div>
       </section>
 
-      {hasAnyData ? <ScriptSetupCard collapsed /> : null}
+      {!hasGoogle ? <ScriptSetupCard /> : <ScriptSetupCard collapsed />}
     </div>
   );
 }

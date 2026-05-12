@@ -43,6 +43,13 @@
       "when": 1778618431908,
       "tag": "0005_married_venom",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1778619721498,
+      "tag": "0006_sloppy_the_fallen",
+      "breakpoints": true
     }
   ]
 }

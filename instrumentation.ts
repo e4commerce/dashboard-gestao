@@ -27,6 +27,7 @@ export async function register() {
     runCogsSync,
     cleanupOrphanedCogsSyncs,
   } = await import("./server/cogs/sync");
+  const { syncMetaInsights } = await import("./server/meta/sync");
 
   // Cleanup órfãos: qualquer run com status "running" vindo de antes do boot
   // não vai mais avançar — marca como "failed" com mensagem explicativa.
@@ -82,7 +83,27 @@ export async function register() {
     { timezone: TZ },
   );
 
+  // Meta Ads insights — toda hora (últimos 30 dias, upsert idempotente).
+  // Só roda se META_ACCESS_TOKEN estiver configurado.
+  cron.schedule(
+    "15 * * * *",
+    async () => {
+      if (!process.env.META_ACCESS_TOKEN) return;
+      const to = new Date();
+      const from = new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+      try {
+        const result = await syncMetaInsights(from, to);
+        console.log("[cron:meta] ok", result);
+      } catch (err) {
+        console.error("[cron:meta] failed", err);
+      }
+    },
+    { timezone: TZ },
+  );
+
   console.log(
-    "[cron] scheduled — extract @ hourly, refresh-costs @ 03:30 " + TZ,
+    "[cron] scheduled — extract @ hourly, refresh-costs @ 03:30 " +
+      TZ +
+      ", meta @ :15 every hour",
   );
 }
