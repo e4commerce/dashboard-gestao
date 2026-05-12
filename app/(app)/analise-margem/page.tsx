@@ -290,8 +290,42 @@ export default async function AnaliseMargemPage({
                         </div>
                       ) : null}
                     </td>
-                    <td className="py-2 pr-3 text-right tabular-nums text-fg-secondary">
-                      {p.cogsInvalid > 0 ? formatBRL(p.cogsInvalid) : "—"}
+                    <td className="group relative py-2 pr-3 text-right tabular-nums text-fg-secondary">
+                      {p.cogsInvalid > 0 ? (
+                        <span className="cursor-help underline decoration-dotted decoration-fg-muted underline-offset-2">
+                          {formatBRL(p.cogsInvalid)}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                      {p.cogsInvalid > 0 ? (
+                        <div className="pointer-events-none invisible absolute right-0 top-full z-20 mt-1 w-48 rounded-md border border-border-default bg-surface-card p-3 text-left shadow-lg group-hover:visible">
+                          <div className="mb-1 flex justify-between gap-3 text-[11px]">
+                            <span className="text-fg-muted">Reenvio</span>
+                            <span className="font-medium tabular-nums text-fg-primary">
+                              {formatBRL(p.cogsInvalidReenvio)}
+                            </span>
+                          </div>
+                          <div className="mb-1 flex justify-between gap-3 text-[11px]">
+                            <span className="text-fg-muted">Troca</span>
+                            <span className="font-medium tabular-nums text-fg-primary">
+                              {formatBRL(p.cogsInvalidTroca)}
+                            </span>
+                          </div>
+                          <div className="mb-1 flex justify-between gap-3 text-[11px]">
+                            <span className="text-fg-muted">Voucher</span>
+                            <span className="font-medium tabular-nums text-fg-primary">
+                              {formatBRL(p.cogsInvalidVoucher)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between gap-3 text-[11px]">
+                            <span className="text-fg-muted">Zerado</span>
+                            <span className="font-medium tabular-nums text-fg-primary">
+                              {formatBRL(p.cogsInvalidZerado)}
+                            </span>
+                          </div>
+                        </div>
+                      ) : null}
                     </td>
                     <td
                       className={`py-2 pr-3 text-right tabular-nums font-medium text-fg-primary ${PERF_COL_CLASS}`}
@@ -399,8 +433,42 @@ export default async function AnaliseMargemPage({
                       </div>
                     </div>
                   </td>
-                  <td className="pt-3 pr-3 text-right tabular-nums text-status-error">
-                    {totals.cogsInvalid > 0 ? formatBRL(totals.cogsInvalid) : "—"}
+                  <td className="group relative pt-3 pr-3 text-right tabular-nums text-status-error">
+                    {totals.cogsInvalid > 0 ? (
+                      <span className="cursor-help underline decoration-dotted decoration-status-error/60 underline-offset-2">
+                        {formatBRL(totals.cogsInvalid)}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                    {totals.cogsInvalid > 0 ? (
+                      <div className="pointer-events-none invisible absolute right-0 bottom-full z-20 mb-1 w-48 rounded-md border border-border-default bg-surface-card p-3 text-left font-normal shadow-lg group-hover:visible">
+                        <div className="mb-1 flex justify-between gap-3 text-[11px]">
+                          <span className="text-fg-muted">Reenvio</span>
+                          <span className="font-medium tabular-nums text-fg-primary">
+                            {formatBRL(totals.cogsInvalidReenvio)}
+                          </span>
+                        </div>
+                        <div className="mb-1 flex justify-between gap-3 text-[11px]">
+                          <span className="text-fg-muted">Troca</span>
+                          <span className="font-medium tabular-nums text-fg-primary">
+                            {formatBRL(totals.cogsInvalidTroca)}
+                          </span>
+                        </div>
+                        <div className="mb-1 flex justify-between gap-3 text-[11px]">
+                          <span className="text-fg-muted">Voucher</span>
+                          <span className="font-medium tabular-nums text-fg-primary">
+                            {formatBRL(totals.cogsInvalidVoucher)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between gap-3 text-[11px]">
+                          <span className="text-fg-muted">Zerado</span>
+                          <span className="font-medium tabular-nums text-fg-primary">
+                            {formatBRL(totals.cogsInvalidZerado)}
+                          </span>
+                        </div>
+                      </div>
+                    ) : null}
                   </td>
                   <td
                     className={`pt-3 pr-3 text-right tabular-nums text-fg-primary ${PERF_COL_CLASS}`}

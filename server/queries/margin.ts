@@ -1,7 +1,18 @@
 import "server-only";
-import { getDailyCosts } from "./costs";
+import {
+  getDailyCosts,
+  getDailyInvalidReasonBreakdown,
+  type DailyInvalidReasonRow,
+} from "./costs";
 import { getDailyAdSpend } from "./ads";
 import { META_TAX_MULTIPLIER } from "@/server/meta/tax";
+
+const EMPTY_REASONS: Omit<DailyInvalidReasonRow, "date"> = {
+  reenvio: 0,
+  troca: 0,
+  voucher: 0,
+  zerado: 0,
+};
 
 // Alíquotas fixas aplicadas sobre o faturamento dos pedidos válidos.
 export const REVENUE_TAX_RATE = 0.0172; // imposto
@@ -15,6 +26,10 @@ export type DailyMarginPoint = {
   faturamento: number;          // receita total dos pedidos válidos
   cogsValid: number;            // custo de produto (apenas pedidos sincronizados)
   cogsInvalid: number;          // custo operacional (troca/voucher/reenvio/zerado)
+  cogsInvalidReenvio: number;
+  cogsInvalidTroca: number;
+  cogsInvalidVoucher: number;
+  cogsInvalidZerado: number;
   cogsCoveragePct: number;      // cobertura DSers nos pedidos válidos
   adSpend: number;              // mídia paga total (Meta com gross-up + Google)
   adMetaRaw: number;            // gasto Meta sem imposto
@@ -63,10 +78,14 @@ export async function getMarginAnalysis(
   dateFrom: Date,
   dateTo: Date,
 ): Promise<MarginAnalysis> {
-  const [costs, ads] = await Promise.all([
+  const [costs, ads, invalidReasons] = await Promise.all([
     getDailyCosts(dateFrom, dateTo),
     getDailyAdSpend(dateFrom, dateTo),
+    getDailyInvalidReasonBreakdown(dateFrom, dateTo),
   ]);
+
+  const reasonByDate = new Map<string, DailyInvalidReasonRow>();
+  for (const r of invalidReasons) reasonByDate.set(r.date, r);
 
   const adByDate = new Map<
     string,
@@ -87,6 +106,10 @@ export async function getMarginAnalysis(
     totalSyncedRevenue += syncedRevenue;
     const cogsValid = c.validCogs;
     const cogsInvalid = c.invalidCogs;
+    const reasons = reasonByDate.get(c.date) ?? {
+      date: c.date,
+      ...EMPTY_REASONS,
+    };
     const ad = adByDate.get(c.date) ?? { total: 0, metaGross: 0, google: 0 };
     const adSpend = ad.total;
     const adMetaRaw = ad.metaGross / META_TAX_MULTIPLIER;
@@ -107,6 +130,10 @@ export async function getMarginAnalysis(
       faturamento,
       cogsValid,
       cogsInvalid,
+      cogsInvalidReenvio: reasons.reenvio,
+      cogsInvalidTroca: reasons.troca,
+      cogsInvalidVoucher: reasons.voucher,
+      cogsInvalidZerado: reasons.zerado,
       cogsCoveragePct: c.validCoveragePct,
       adSpend,
       adMetaRaw,
@@ -129,6 +156,10 @@ export async function getMarginAnalysis(
       acc.faturamento += p.faturamento;
       acc.cogsValid += p.cogsValid;
       acc.cogsInvalid += p.cogsInvalid;
+      acc.cogsInvalidReenvio += p.cogsInvalidReenvio;
+      acc.cogsInvalidTroca += p.cogsInvalidTroca;
+      acc.cogsInvalidVoucher += p.cogsInvalidVoucher;
+      acc.cogsInvalidZerado += p.cogsInvalidZerado;
       acc.adSpend += p.adSpend;
       acc.adMetaRaw += p.adMetaRaw;
       acc.adMetaTax += p.adMetaTax;
@@ -142,6 +173,10 @@ export async function getMarginAnalysis(
       faturamento: 0,
       cogsValid: 0,
       cogsInvalid: 0,
+      cogsInvalidReenvio: 0,
+      cogsInvalidTroca: 0,
+      cogsInvalidVoucher: 0,
+      cogsInvalidZerado: 0,
       adSpend: 0,
       adMetaRaw: 0,
       adMetaTax: 0,

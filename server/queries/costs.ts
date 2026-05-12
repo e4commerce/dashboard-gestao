@@ -51,6 +51,14 @@ export type InvalidReasonBreakdown = {
   cogs: number;
 };
 
+export type DailyInvalidReasonRow = {
+  date: string;
+  reenvio: number;
+  troca: number;
+  voucher: number;
+  zerado: number;
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function groupSummary(
@@ -216,6 +224,53 @@ export async function getDailyCosts(
     });
   }
   return points;
+}
+
+// ─── Breakdown diário dos custos "inválidos" por motivo ──────────────────────
+
+export async function getDailyInvalidReasonBreakdown(
+  dateFrom: Date,
+  dateTo: Date,
+): Promise<DailyInvalidReasonRow[]> {
+  const reasonExpr = sql<string>`
+    CASE
+      WHEN ${orders.tags} ILIKE '%Reenvio%' THEN 'reenvio'
+      WHEN ${orders.discountCodes} ILIKE '%TROCA%' THEN 'troca'
+      WHEN ${orders.discountCodes} ILIKE '%VOUCHER%' THEN 'voucher'
+      WHEN ${orders.totalPrice} = 0 THEN 'zerado'
+    END`;
+  const dayBucket = sql`date_trunc('day', ${orders.createdAt} AT TIME ZONE 'America/Sao_Paulo')`;
+
+  const rows = await db
+    .select({
+      day: sql<string>`to_char(${dayBucket}, 'YYYY-MM-DD')`,
+      reason: reasonExpr,
+      cogs: sql<number>`COALESCE(SUM(${orders.cogsAmount}), 0)::float`,
+    })
+    .from(orders)
+    .where(
+      and(
+        invalidOrder,
+        gte(orders.createdAt, dateFrom),
+        lt(orders.createdAt, dateTo),
+        hasCogs,
+      ),
+    )
+    .groupBy(dayBucket, reasonExpr);
+
+  const map = new Map<string, DailyInvalidReasonRow>();
+  for (const r of rows) {
+    let entry = map.get(r.day);
+    if (!entry) {
+      entry = { date: r.day, reenvio: 0, troca: 0, voucher: 0, zerado: 0 };
+      map.set(r.day, entry);
+    }
+    if (r.reason === "reenvio") entry.reenvio += r.cogs;
+    else if (r.reason === "troca") entry.troca += r.cogs;
+    else if (r.reason === "voucher") entry.voucher += r.cogs;
+    else if (r.reason === "zerado") entry.zerado += r.cogs;
+  }
+  return Array.from(map.values());
 }
 
 // ─── Breakdown dos custos "inválidos" por motivo ──────────────────────────────

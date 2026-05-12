@@ -4,10 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "preDeployCommand": [
-      "npm run db:migrate:prod",
-      "npm run backfill:cogs-history"
-    ],
+    "preDeployCommand": "npm run db:migrate:prod && npm run backfill:cogs-history",
     "startCommand": "npm run start",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
