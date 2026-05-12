@@ -3,6 +3,7 @@ import { db } from "@/server/db/client";
 import { adsInsights } from "@/server/db/schema";
 import { and, gte, inArray, lte, sql } from "drizzle-orm";
 import { toIsoDateSP, daysBetweenSP } from "@/lib/datetime";
+import { META_TAX_MULTIPLIER } from "@/server/meta/tax";
 
 export type Platform = "google" | "meta";
 const ALL_PLATFORMS: Platform[] = ["google", "meta"];
@@ -79,7 +80,8 @@ export async function getDailyAdSpend(
       entry.google.clicks += r.clicks ?? 0;
       entry.google.impressions += r.impressions ?? 0;
     } else if (r.platform === "meta") {
-      entry.meta.spend += r.spend ?? 0;
+      // Spend Meta sempre inclui imposto (gross-up); o raw fica no DB.
+      entry.meta.spend += (r.spend ?? 0) * META_TAX_MULTIPLIER;
       entry.meta.clicks += r.clicks ?? 0;
       entry.meta.impressions += r.impressions ?? 0;
       entry.meta.conversions += r.conversions ?? 0;
@@ -139,18 +141,20 @@ export async function getAdsSummary(
   };
   for (const r of rows) {
     const p = r.platform as Platform;
-    byPlatform[p] = r.totalSpend ?? 0;
+    const raw = r.totalSpend ?? 0;
+    byPlatform[p] = p === "meta" ? raw * META_TAX_MULTIPLIER : raw;
     if (r.lastSync) {
       lastSyncByPlatform[p] =
         r.lastSync instanceof Date ? r.lastSync : new Date(r.lastSync);
     }
   }
 
-  // Para "dias com gasto" e "pico" usamos a soma por dia
+  // Para "dias com gasto" e "pico" usamos a soma por dia, já com gross-up
+  // do Meta aplicado na própria query (CASE) pra refletir nos agregados.
   const dailyRows = await db
     .select({
       date: adsInsights.date,
-      daySpend: sql<number>`SUM(${adsInsights.spend})::float`,
+      daySpend: sql<number>`SUM(CASE WHEN ${adsInsights.platform} = 'meta' THEN ${adsInsights.spend} * ${META_TAX_MULTIPLIER} ELSE ${adsInsights.spend} END)::float`,
     })
     .from(adsInsights)
     .where(
