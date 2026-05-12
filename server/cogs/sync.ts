@@ -47,6 +47,7 @@ async function fetchDsersChunked(
 
   const all: DsersOrder[] = [];
   const failedChunks: string[] = [];
+  const failureReasons: string[] = [];
 
   for (let i = 0; i < chunks.length; i += CONCURRENCY) {
     const batch = chunks.slice(i, i + CONCURRENCY);
@@ -55,8 +56,19 @@ async function fetchDsersChunked(
     );
     results.forEach((r, j) => {
       if (r.status === "fulfilled") all.push(...r.value);
-      else failedChunks.push(batch[j].label);
+      else {
+        failedChunks.push(batch[j].label);
+        const msg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+        if (failureReasons.length < 3) failureReasons.push(msg);
+      }
     });
+  }
+
+  // Se TODOS os chunks falharam com o mesmo erro, isso quase certamente é um
+  // problema de auth/config — propaga em vez de silenciar como "0 confirmados".
+  if (failedChunks.length === chunks.length && chunks.length > 0) {
+    const reason = failureReasons[0] ?? "erro desconhecido";
+    throw new Error(`Todos os chunks DSers falharam. Primeiro erro: ${reason}`);
   }
 
   return { orders: all, failedChunks };
