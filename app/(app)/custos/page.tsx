@@ -3,6 +3,7 @@ import { MonthPicker } from "@/components/month-picker";
 import { CostsDailyTable } from "@/components/dashboard/costs-daily-table";
 import { AutoRefreshOnSync } from "@/components/auto-refresh-on-sync";
 import { SyncCogsButton } from "./sync-button";
+import { SyncMpButton } from "./sync-mp-button";
 import {
   getCostsOverview,
   getDailyCosts,
@@ -10,6 +11,7 @@ import {
   type CostGroupSummary,
 } from "@/server/queries/costs";
 import { getRecentCogsSyncLogs } from "@/server/cogs/sync";
+import { getMpSummary } from "@/server/queries/gateway-fees";
 import {
   parseMonthKey,
   toMonthKeySP,
@@ -236,11 +238,12 @@ export default async function CustosPage({
   const from = startOfMonthFromKey(month);
   const to = endOfMonthFromKey(month);
 
-  const [overview, daily, invalidBreakdown, syncLogs] = await Promise.all([
+  const [overview, daily, invalidBreakdown, syncLogs, mp] = await Promise.all([
     getCostsOverview(from, to),
     getDailyCosts(from, to),
     getInvalidReasonBreakdown(from, to),
     getRecentCogsSyncLogs(10),
+    getMpSummary(from, to),
   ]);
 
   const totalCogs = overview.valid.totalCogs + overview.invalid.totalCogs;
@@ -252,6 +255,7 @@ export default async function CustosPage({
   return (
     <div className="mx-auto flex max-w-[1200px] flex-col gap-6">
       <AutoRefreshOnSync channel="cogs" />
+      <AutoRefreshOnSync channel="mp" />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <PageHeader
           title="Custos de Produto"
@@ -259,16 +263,27 @@ export default async function CustosPage({
         />
         <div className="flex items-center gap-3">
           <MonthPicker month={month} />
+          <SyncMpButton month={month} />
           <SyncCogsButton month={month} />
         </div>
       </div>
 
       {/* ── Resumo geral ── */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <StatCard
           label="Custo total"
           value={formatBRL(totalCogs)}
           sub="válidos + inválidos"
+        />
+        <StatCard
+          label="Taxa MP"
+          value={mp.totalFees > 0 ? formatBRL(mp.totalFees) : "—"}
+          sub={
+            mp.paymentCount > 0
+              ? `${mp.paymentCount} pgto(s) · ${mp.feePct.toFixed(2)}%`
+              : "Sincronize pra carregar"
+          }
+          accent={mp.totalFees > 0 ? "negative" : "neutral"}
         />
         <StatCard
           label="% Custo de produto"

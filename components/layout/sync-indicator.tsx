@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 type SyncStatus = {
   shopify: { running: boolean; runningSince: string | null };
   cogs: { running: boolean; runningSince: string | null };
+  mp: { running: boolean; runningSince: string | null };
 };
 
 const POLL_MS = 4000;
@@ -39,6 +40,7 @@ export function SyncIndicator() {
   const items: Array<{ key: string; label: string }> = [];
   if (status.shopify.running) items.push({ key: "shopify", label: "Shopify" });
   if (status.cogs.running) items.push({ key: "cogs", label: "Custos" });
+  if (status.mp.running) items.push({ key: "mp", label: "MP" });
   if (items.length === 0) return null;
 
   return (

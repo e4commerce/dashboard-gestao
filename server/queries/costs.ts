@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "@/server/db/client";
-import { orders } from "@/server/db/schema";
-import { and, gte, lt, sql, type SQL } from "drizzle-orm";
+import { mpPayments, orders } from "@/server/db/schema";
+import { and, gte, isNotNull, lt, sql, type SQL } from "drizzle-orm";
 import { validOrder, invalidOrder, hasCogs } from "./order-filters";
 import { toIsoDateSP, daysBetweenSP } from "@/lib/datetime";
 
@@ -40,6 +40,8 @@ export type DailyCostPoint = {
   validProfit: number;             // receita_sync - cogs
   // Inválidos (operacional)
   invalidCogs: number;
+  // Taxa de gateway (Mercado Pago) — agregado por dia de aprovação
+  mpFee: number;
 };
 
 export type InvalidReasonBreakdown = {
@@ -144,6 +146,25 @@ export async function getDailyCosts(
     .where(and(invalidOrder, gte(orders.createdAt, dateFrom), lt(orders.createdAt, dateTo), hasCogs))
     .groupBy(sql`date_trunc('day', ${orders.createdAt} AT TIME ZONE 'America/Sao_Paulo')`);
 
+  // Taxas Mercado Pago — só pagamentos aprovados; agrupamos por date_approved
+  const mpRows = await db
+    .select({
+      day: sql<string>`to_char((${mpPayments.dateApproved} AT TIME ZONE 'America/Sao_Paulo')::date, 'YYYY-MM-DD')`,
+      fee: sql<number>`COALESCE(SUM(${mpPayments.feeAmount})::float, 0)`,
+    })
+    .from(mpPayments)
+    .where(
+      and(
+        isNotNull(mpPayments.dateApproved),
+        gte(mpPayments.dateApproved, dateFrom),
+        lt(mpPayments.dateApproved, dateTo),
+        sql`${mpPayments.status} = 'approved'`,
+      ),
+    )
+    .groupBy(
+      sql`to_char((${mpPayments.dateApproved} AT TIME ZONE 'America/Sao_Paulo')::date, 'YYYY-MM-DD')`,
+    );
+
   type ValidAgg = {
     orders: number;
     ordersWithCogs: number;
@@ -163,6 +184,9 @@ export async function getDailyCosts(
   }
   const invalidMap = new Map<string, number>();
   for (const r of invalidRows) invalidMap.set(r.day, r.cogs);
+
+  const mpMap = new Map<string, number>();
+  for (const r of mpRows) mpMap.set(r.day, r.fee);
 
   const today = toIsoDateSP(new Date());
   const points: DailyCostPoint[] = [];
@@ -188,6 +212,7 @@ export async function getDailyCosts(
       validCostPctOverall: v.revenueTotal > 0 ? (v.cogs / v.revenueTotal) * 100 : 0,
       validProfit: v.revenue - v.cogs,
       invalidCogs: invalidMap.get(key) ?? 0,
+      mpFee: mpMap.get(key) ?? 0,
     });
   }
   return points;

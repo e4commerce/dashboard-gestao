@@ -28,17 +28,22 @@ export async function register() {
     cleanupOrphanedCogsSyncs,
   } = await import("./server/cogs/sync");
   const { syncMetaInsights } = await import("./server/meta/sync");
+  const {
+    runMpSync,
+    cleanupOrphanedMpSyncs,
+  } = await import("./server/mercadopago/sync");
 
   // Cleanup órfãos: qualquer run com status "running" vindo de antes do boot
   // não vai mais avançar — marca como "failed" com mensagem explicativa.
   try {
-    const [orphanExt, orphanCogs] = await Promise.all([
+    const [orphanExt, orphanCogs, orphanMp] = await Promise.all([
       cleanupOrphanedExtractions(),
       cleanupOrphanedCogsSyncs(),
+      cleanupOrphanedMpSyncs(),
     ]);
-    if (orphanExt + orphanCogs > 0) {
+    if (orphanExt + orphanCogs + orphanMp > 0) {
       console.log(
-        `[startup] cleaned orphaned runs — ${orphanExt} extrações, ${orphanCogs} cogs syncs`,
+        `[startup] cleaned orphaned runs — ${orphanExt} extrações, ${orphanCogs} cogs, ${orphanMp} mp`,
       );
     }
   } catch (err) {
@@ -101,9 +106,26 @@ export async function register() {
     { timezone: TZ },
   );
 
+  // Mercado Pago — a cada 30 min, últimos 30 dias. Skip se token não setado.
+  cron.schedule(
+    "*/30 * * * *",
+    async () => {
+      if (!process.env.MP_ACCESS_TOKEN) return;
+      const to = new Date();
+      const from = new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+      try {
+        const { logId, result } = await runMpSync(from, to, "cron");
+        console.log("[cron:mp] ok", { logId, ...result });
+      } catch (err) {
+        console.error("[cron:mp] failed", err);
+      }
+    },
+    { timezone: TZ },
+  );
+
   console.log(
     "[cron] scheduled — extract @ hourly, refresh-costs @ 03:30 " +
       TZ +
-      ", meta @ every 15 min",
+      ", meta every 15 min, mp every 30 min",
   );
 }

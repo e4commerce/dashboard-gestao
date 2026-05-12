@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/server/db/client";
-import { cogsSyncLogs, extractionLogs } from "@/server/db/schema";
+import {
+  cogsSyncLogs,
+  extractionLogs,
+  mpSyncLogs,
+} from "@/server/db/schema";
 import { desc, eq } from "drizzle-orm";
 
 export const runtime = "nodejs";
@@ -16,8 +20,10 @@ export async function GET() {
   const [
     shopifyRunningRows,
     cogsRunningRows,
+    mpRunningRows,
     [latestShopify],
     [latestCogs],
+    [latestMp],
   ] = await Promise.all([
     db
       .select({ id: extractionLogs.id, startedAt: extractionLogs.startedAt })
@@ -30,6 +36,12 @@ export async function GET() {
       .from(cogsSyncLogs)
       .where(eq(cogsSyncLogs.status, "running"))
       .orderBy(desc(cogsSyncLogs.startedAt))
+      .limit(1),
+    db
+      .select({ id: mpSyncLogs.id, startedAt: mpSyncLogs.startedAt })
+      .from(mpSyncLogs)
+      .where(eq(mpSyncLogs.status, "running"))
+      .orderBy(desc(mpSyncLogs.startedAt))
       .limit(1),
     db
       .select({
@@ -49,6 +61,15 @@ export async function GET() {
       .from(cogsSyncLogs)
       .orderBy(desc(cogsSyncLogs.startedAt))
       .limit(1),
+    db
+      .select({
+        id: mpSyncLogs.id,
+        status: mpSyncLogs.status,
+        completedAt: mpSyncLogs.completedAt,
+      })
+      .from(mpSyncLogs)
+      .orderBy(desc(mpSyncLogs.startedAt))
+      .limit(1),
   ]);
 
   return NextResponse.json({
@@ -63,6 +84,12 @@ export async function GET() {
       runningLogId: cogsRunningRows[0]?.id ?? null,
       runningSince: cogsRunningRows[0]?.startedAt ?? null,
       latest: latestCogs ?? null,
+    },
+    mp: {
+      running: mpRunningRows.length > 0,
+      runningLogId: mpRunningRows[0]?.id ?? null,
+      runningSince: mpRunningRows[0]?.startedAt ?? null,
+      latest: latestMp ?? null,
     },
   });
 }

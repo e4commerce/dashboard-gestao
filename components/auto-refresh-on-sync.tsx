@@ -3,13 +3,14 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
-type Channel = "shopify" | "cogs";
+type Channel = "shopify" | "cogs" | "mp";
 
 const POLL_MS = 4000;
 
 type SyncResponse = {
   shopify: { running: boolean };
   cogs: { running: boolean };
+  mp: { running: boolean };
 };
 
 // Faz router.refresh() periodicamente enquanto o canal informado estiver com

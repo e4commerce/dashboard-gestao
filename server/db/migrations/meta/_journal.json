@@ -50,6 +50,13 @@
       "when": 1778619721498,
       "tag": "0006_sloppy_the_fallen",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1778620512723,
+      "tag": "0007_stiff_trish_tilby",
+      "breakpoints": true
     }
   ]
 }

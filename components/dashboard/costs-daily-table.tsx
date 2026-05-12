@@ -29,6 +29,7 @@ export function CostsDailyTable({ data }: Props) {
       acc.validRevenue += p.validRevenue;
       acc.validCogs += p.validCogs;
       acc.invalidCogs += p.invalidCogs;
+      acc.mpFee += p.mpFee;
       return acc;
     },
     {
@@ -38,6 +39,7 @@ export function CostsDailyTable({ data }: Props) {
       validRevenue: 0,
       validCogs: 0,
       invalidCogs: 0,
+      mpFee: 0,
     },
   );
   const totalCoverage =
@@ -71,6 +73,12 @@ export function CostsDailyTable({ data }: Props) {
               >
                 % Custo
               </th>
+              <th
+                className="pb-2 pr-3 text-right font-medium text-fg-muted"
+                title="Taxa Mercado Pago paga no dia de aprovação"
+              >
+                Taxa MP
+              </th>
               <th className="pb-2 text-right font-medium text-fg-muted">Custo op.</th>
             </tr>
           </thead>
@@ -103,6 +111,9 @@ export function CostsDailyTable({ data }: Props) {
                   >
                     {hasCogs ? formatPercent(p.validCostPct, 1) : "—"}
                   </td>
+                  <td className="py-2 pr-3 text-right tabular-nums text-fg-secondary">
+                    {p.mpFee > 0 ? formatBRL(p.mpFee) : "—"}
+                  </td>
                   <td className="py-2 pl-2 text-right tabular-nums text-fg-secondary">
                     {p.invalidCogs > 0 ? formatBRL(p.invalidCogs) : "—"}
                   </td>
@@ -131,6 +142,9 @@ export function CostsDailyTable({ data }: Props) {
                 className={`pt-3 pr-3 text-right tabular-nums ${pctAccent(totalCostPct, "cost")}`}
               >
                 {totals.validRevenue > 0 ? formatPercent(totalCostPct, 1) : "—"}
+              </td>
+              <td className="pt-3 pr-3 text-right tabular-nums text-fg-primary">
+                {totals.mpFee > 0 ? formatBRL(totals.mpFee) : "—"}
               </td>
               <td className="pt-3 pl-2 text-right tabular-nums text-status-error">
                 {totals.invalidCogs > 0 ? formatBRL(totals.invalidCogs) : "—"}

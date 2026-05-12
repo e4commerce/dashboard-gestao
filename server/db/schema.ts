@@ -32,6 +32,12 @@ export const cogsSyncSourceEnum = pgEnum("cogs_sync_source", [
   "manual",
   "cron",
 ]);
+export const mpSyncStatusEnum = pgEnum("mp_sync_status", [
+  "running",
+  "completed",
+  "failed",
+]);
+export const mpSyncSourceEnum = pgEnum("mp_sync_source", ["manual", "cron"]);
 export const userRoleEnum = pgEnum("user_role", ["admin", "viewer"]);
 
 export const users = pgTable(
@@ -260,6 +266,61 @@ export const adsInsights = pgTable(
   ],
 );
 
+// Pagamentos Mercado Pago. Granular por payment_id pra upsert idempotente;
+// dashboard /custos agrega por dia. Não acopla com orders — propositalmente
+// desacoplado pra ficar simples de re-sincronizar.
+export const mpPayments = pgTable(
+  "mp_payments",
+  {
+    id: varchar("id", { length: 64 }).primaryKey(), // MP payment id
+    status: varchar("status", { length: 32 }),
+    statusDetail: varchar("status_detail", { length: 64 }),
+    dateCreated: timestamp("date_created", { withTimezone: true }),
+    dateApproved: timestamp("date_approved", { withTimezone: true }),
+    transactionAmount: numeric("transaction_amount", {
+      precision: 12,
+      scale: 2,
+    }),
+    feeAmount: numeric("fee_amount", { precision: 12, scale: 2 }),
+    netReceivedAmount: numeric("net_received_amount", {
+      precision: 12,
+      scale: 2,
+    }),
+    externalReference: varchar("external_reference", { length: 128 }),
+    paymentMethodId: varchar("payment_method_id", { length: 64 }),
+    paymentTypeId: varchar("payment_type_id", { length: 64 }),
+    currency: varchar("currency", { length: 8 }),
+    syncedAt: timestamp("synced_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("mp_payments_date_approved_idx").on(t.dateApproved),
+    index("mp_payments_external_ref_idx").on(t.externalReference),
+  ],
+);
+
+export const mpSyncLogs = pgTable(
+  "mp_sync_logs",
+  {
+    id: serial("id").primaryKey(),
+    source: mpSyncSourceEnum("source").notNull().default("manual"),
+    status: mpSyncStatusEnum("status").notNull().default("running"),
+    dateFrom: timestamp("date_from", { withTimezone: true }).notNull(),
+    dateTo: timestamp("date_to", { withTimezone: true }).notNull(),
+    paymentsFetched: integer("payments_fetched").notNull().default(0),
+    paymentsUpserted: integer("payments_upserted").notNull().default(0),
+    totalFees: numeric("total_fees", { precision: 14, scale: 2 }),
+    errorMessage: text("error_message"),
+    executionTimeMs: integer("execution_time_ms"),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (t) => [index("mp_sync_logs_started_at_idx").on(t.startedAt)],
+);
+
 // Contas Meta Ads descobertas via /me/adaccounts.
 // O campo `enabled` é controlado pelo usuário na UI e decide quais contas
 // participam do sync.
@@ -297,6 +358,8 @@ export type MonthlyGoal = typeof monthlyGoals.$inferSelect;
 export type DailyWeight = typeof dailyWeights.$inferSelect;
 export type ExtractionLog = typeof extractionLogs.$inferSelect;
 export type CogsSyncLog = typeof cogsSyncLogs.$inferSelect;
+export type MpPayment = typeof mpPayments.$inferSelect;
+export type MpSyncLog = typeof mpSyncLogs.$inferSelect;
 export type AdsInsight = typeof adsInsights.$inferSelect;
 export type MetaAdAccount = typeof metaAdAccounts.$inferSelect;
 export type ServiceToken = typeof serviceTokens.$inferSelect;
