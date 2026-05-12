@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/server/db/client";
 import { mpPayments } from "@/server/db/schema";
-import { runMpSync } from "@/server/mercadopago/sync";
+import { isMpSyncRunning, startMpSyncBackground } from "@/server/mercadopago/sync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
 
 async function isInitialSync(): Promise<boolean> {
   const [row] = await db.select({ id: mpPayments.id }).from(mpPayments).limit(1);
@@ -23,6 +22,10 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  if (await isMpSyncRunning()) {
+    return NextResponse.json({ ok: true, skipped: true, reason: "sync already in progress" });
+  }
+
   const initial = await isInitialSync();
   const windowHours = initial ? 30 * 24 : 12;
 
@@ -30,8 +33,8 @@ export async function GET(req: Request) {
   const dateFrom = new Date(dateTo.getTime() - windowHours * 60 * 60 * 1000);
 
   try {
-    const { logId, result } = await runMpSync(dateFrom, dateTo, "cron");
-    return NextResponse.json({ ok: true, initial, windowHours, logId, ...result });
+    const { logId } = await startMpSyncBackground(dateFrom, dateTo, "cron");
+    return NextResponse.json({ ok: true, initial, windowHours, logId, mode: "background" });
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "Unknown error" },

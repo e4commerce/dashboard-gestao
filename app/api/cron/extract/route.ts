@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/server/db/client";
 import { orders } from "@/server/db/schema";
-import { runExtraction } from "@/server/etl/extract";
+import { isExtractionRunning, startExtractionBackground } from "@/server/etl/extract";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
 
 async function isInitialSync(): Promise<boolean> {
   const [row] = await db.select({ id: orders.id }).from(orders).limit(1);
@@ -35,6 +34,10 @@ async function handle(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  if (await isExtractionRunning()) {
+    return NextResponse.json({ ok: true, skipped: true, reason: "extraction already in progress" });
+  }
+
   const url = new URL(req.url);
   const daysParam = url.searchParams.get("days");
 
@@ -52,21 +55,11 @@ async function handle(req: Request) {
   const dateFrom = new Date(dateTo.getTime() - windowHours * 60 * 60 * 1000);
 
   try {
-    const result = await runExtraction(dateFrom, dateTo, "shopify");
-    return NextResponse.json({
-      ok: true,
-      initial,
-      windowHours,
-      logId: result.logId,
-      stats: result.stats,
-      durationMs: result.durationMs,
-    });
+    const { logId } = await startExtractionBackground(dateFrom, dateTo, "shopify");
+    return NextResponse.json({ ok: true, initial, windowHours, logId, mode: "background" });
   } catch (err) {
     return NextResponse.json(
-      {
-        ok: false,
-        error: err instanceof Error ? err.message : "Unknown error",
-      },
+      { ok: false, error: err instanceof Error ? err.message : "Unknown error" },
       { status: 500 },
     );
   }
