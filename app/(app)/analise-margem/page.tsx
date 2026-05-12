@@ -184,20 +184,11 @@ export default async function AnaliseMargemPage({
                 <th className="pb-2 pr-3 text-right font-medium text-fg-muted">
                   Mídia
                 </th>
-                <th className="pb-2 pr-3 text-right font-medium text-fg-muted">
-                  Gateway
-                </th>
                 <th
                   className="pb-2 pr-3 text-right font-medium text-fg-muted"
-                  title={`Imposto ${TAX_LABEL} sob faturamento`}
+                  title={`Gateway (Mercado Pago) + Imposto ${TAX_LABEL} + Checkout ${CHECKOUT_LABEL}`}
                 >
-                  Imposto
-                </th>
-                <th
-                  className="pb-2 pr-3 text-right font-medium text-fg-muted"
-                  title={`Taxa de checkout ${CHECKOUT_LABEL} sob faturamento`}
-                >
-                  Checkout
+                  Taxas
                 </th>
                 <th
                   className="pb-2 pr-3 text-right font-medium text-fg-muted"
@@ -241,14 +232,43 @@ export default async function AnaliseMargemPage({
                     <td className="py-2 pr-3 text-right tabular-nums text-fg-secondary">
                       {p.adSpend > 0 ? formatBRL(p.adSpend) : "—"}
                     </td>
-                    <td className="py-2 pr-3 text-right tabular-nums text-fg-secondary">
-                      {p.gatewayFee > 0 ? formatBRL(p.gatewayFee) : "—"}
-                    </td>
-                    <td className="py-2 pr-3 text-right tabular-nums text-fg-secondary">
-                      {p.revenueTax > 0 ? formatBRL(p.revenueTax) : "—"}
-                    </td>
-                    <td className="py-2 pr-3 text-right tabular-nums text-fg-secondary">
-                      {p.checkoutFee > 0 ? formatBRL(p.checkoutFee) : "—"}
+                    <td className="group relative py-2 pr-3 text-right tabular-nums text-fg-secondary">
+                      {(() => {
+                        const totalFees =
+                          p.gatewayFee + p.revenueTax + p.checkoutFee;
+                        if (totalFees === 0) return "—";
+                        return (
+                          <span className="cursor-help underline decoration-dotted decoration-fg-muted underline-offset-2">
+                            {formatBRL(totalFees)}
+                          </span>
+                        );
+                      })()}
+                      {p.gatewayFee + p.revenueTax + p.checkoutFee > 0 ? (
+                        <div className="pointer-events-none invisible absolute right-0 top-full z-20 mt-1 w-48 rounded-md border border-border-default bg-surface-card p-3 text-left shadow-lg group-hover:visible">
+                          <div className="mb-1 flex justify-between gap-3 text-[11px]">
+                            <span className="text-fg-muted">Gateway</span>
+                            <span className="font-medium tabular-nums text-fg-primary">
+                              {formatBRL(p.gatewayFee)}
+                            </span>
+                          </div>
+                          <div className="mb-1 flex justify-between gap-3 text-[11px]">
+                            <span className="text-fg-muted">
+                              Imposto ({TAX_LABEL})
+                            </span>
+                            <span className="font-medium tabular-nums text-fg-primary">
+                              {formatBRL(p.revenueTax)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between gap-3 text-[11px]">
+                            <span className="text-fg-muted">
+                              Checkout ({CHECKOUT_LABEL})
+                            </span>
+                            <span className="font-medium tabular-nums text-fg-primary">
+                              {formatBRL(p.checkoutFee)}
+                            </span>
+                          </div>
+                        </div>
+                      ) : null}
                     </td>
                     <td className="py-2 pr-3 text-right tabular-nums text-fg-secondary">
                       {p.cogsInvalid > 0 ? formatBRL(p.cogsInvalid) : "—"}
@@ -278,7 +298,7 @@ export default async function AnaliseMargemPage({
               })}
               {daily.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="py-6 text-center text-fg-muted">
+                  <td colSpan={11} className="py-6 text-center text-fg-muted">
                     Nenhum dado disponível para o período.
                   </td>
                 </tr>
@@ -304,14 +324,38 @@ export default async function AnaliseMargemPage({
                   <td className="pt-3 pr-3 text-right tabular-nums text-fg-primary">
                     {formatBRL(totals.adSpend)}
                   </td>
-                  <td className="pt-3 pr-3 text-right tabular-nums text-fg-primary">
-                    {totals.gatewayFee > 0 ? formatBRL(totals.gatewayFee) : "—"}
-                  </td>
-                  <td className="pt-3 pr-3 text-right tabular-nums text-fg-primary">
-                    {formatBRL(totals.revenueTax)}
-                  </td>
-                  <td className="pt-3 pr-3 text-right tabular-nums text-fg-primary">
-                    {formatBRL(totals.checkoutFee)}
+                  <td className="group relative pt-3 pr-3 text-right tabular-nums text-fg-primary">
+                    <span className="cursor-help underline decoration-dotted decoration-fg-muted underline-offset-2">
+                      {formatBRL(
+                        totals.gatewayFee +
+                          totals.revenueTax +
+                          totals.checkoutFee,
+                      )}
+                    </span>
+                    <div className="pointer-events-none invisible absolute right-0 bottom-full z-20 mb-1 w-48 rounded-md border border-border-default bg-surface-card p-3 text-left font-normal shadow-lg group-hover:visible">
+                      <div className="mb-1 flex justify-between gap-3 text-[11px]">
+                        <span className="text-fg-muted">Gateway</span>
+                        <span className="font-medium tabular-nums text-fg-primary">
+                          {formatBRL(totals.gatewayFee)}
+                        </span>
+                      </div>
+                      <div className="mb-1 flex justify-between gap-3 text-[11px]">
+                        <span className="text-fg-muted">
+                          Imposto ({TAX_LABEL})
+                        </span>
+                        <span className="font-medium tabular-nums text-fg-primary">
+                          {formatBRL(totals.revenueTax)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-3 text-[11px]">
+                        <span className="text-fg-muted">
+                          Checkout ({CHECKOUT_LABEL})
+                        </span>
+                        <span className="font-medium tabular-nums text-fg-primary">
+                          {formatBRL(totals.checkoutFee)}
+                        </span>
+                      </div>
+                    </div>
                   </td>
                   <td className="pt-3 pr-3 text-right tabular-nums text-status-error">
                     {totals.cogsInvalid > 0 ? formatBRL(totals.cogsInvalid) : "—"}
