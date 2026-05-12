@@ -1,17 +1,26 @@
 import { NextResponse } from "next/server";
 import { db } from "@/server/db/client";
 import { orders } from "@/server/db/schema";
-import { fetchDsersOrders } from "@/server/dsers/client";
 import { desc } from "drizzle-orm";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 // Endpoint temporário de diagnóstico — mostra os nomes que o Profitfy retorna
 // e compara com os orderName do Shopify no DB.
 // Acesse: GET /api/debug/dsers-names
 // Remova após resolver o problema de matching.
 export async function GET() {
+  const rawUrl = process.env.PROFITFY_API_URL;
+  const apiKey = process.env.PROFITFY_API_KEY;
+
+  if (!rawUrl || !apiKey) {
+    return NextResponse.json({ error: "PROFITFY_API_URL ou PROFITFY_API_KEY não configurados" }, { status: 500 });
+  }
+
+  const baseUrl = rawUrl.replace(/\/$/, "").replace(/\/api$/, "");
+
   // Pega os 5 orderNames mais recentes do nosso DB
   const dbSample = await db
     .select({ orderName: orders.orderName, createdAt: orders.createdAt })
@@ -19,29 +28,68 @@ export async function GET() {
     .orderBy(desc(orders.createdAt))
     .limit(5);
 
-  // Busca 1 dia recente do DSers (ontem, em Unix seconds)
+  // Tenta 30 dias para garantir que há pedidos no período
   const now = Math.floor(Date.now() / 1000);
-  const oneDayAgo = now - 86400;
+  const thirtyDaysAgo = now - 30 * 86400;
 
-  let dsersSample: string[] = [];
+  let rawResponse: unknown = null;
   let dsersError: string | null = null;
-  let dsersTotal = 0;
 
   try {
-    const dsersOrders = await fetchDsersOrders(oneDayAgo, now);
-    dsersTotal = dsersOrders.length;
-    dsersSample = dsersOrders.slice(0, 10).map((o) => o.name);
+    const res = await fetch(`${baseUrl}/api/v1/dsers/orders`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        startTime: String(thirtyDaysAgo),
+        endTime: String(now),
+      }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(90_000),
+    });
+
+    const text = await res.text();
+    if (!res.ok) {
+      dsersError = `HTTP ${res.status}: ${text}`;
+    } else {
+      try {
+        rawResponse = JSON.parse(text);
+      } catch {
+        dsersError = `Resposta não é JSON: ${text.slice(0, 200)}`;
+      }
+    }
   } catch (err) {
     dsersError = err instanceof Error ? err.message : String(err);
   }
 
+  // Extrai amostra dos pedidos do DSers para mostrar a estrutura real
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const raw = rawResponse as any;
+  const dsersOrdersSample = Array.isArray(raw?.orders)
+    ? raw.orders.slice(0, 5).map((o: Record<string, unknown>) => ({
+        id: o.id,
+        name: o.name,
+        totalCost: o.totalCost,
+        // mostra todos os campos para diagnóstico
+        keys: Object.keys(o),
+      }))
+    : null;
+
+  const normalize = (s: string) => s.replace(/^#/, "").trim();
+
   return NextResponse.json({
-    shopify_orderName_sample: dbSample.map((r) => ({
-      orderName: r.orderName,
+    api_url: baseUrl,
+    shopify_sample: dbSample.map((r) => ({
+      raw: r.orderName,
+      normalized: r.orderName ? normalize(r.orderName) : null,
       createdAt: r.createdAt,
     })),
-    dsers_name_sample: dsersSample,
-    dsers_total_last_24h: dsersTotal,
+    dsers_response_top_keys: raw ? Object.keys(raw) : null,
+    dsers_total: raw?.total ?? null,
+    dsers_orders_count: Array.isArray(raw?.orders) ? raw.orders.length : null,
+    dsers_sample: dsersOrdersSample,
     dsers_error: dsersError,
   });
 }
