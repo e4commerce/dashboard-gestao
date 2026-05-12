@@ -1,6 +1,7 @@
 import "server-only";
 import { getDailyCosts } from "./costs";
 import { getDailyAdSpend } from "./ads";
+import { META_TAX_MULTIPLIER } from "@/server/meta/tax";
 
 // Alíquotas fixas aplicadas sobre o faturamento dos pedidos válidos.
 export const REVENUE_TAX_RATE = 0.0172; // imposto
@@ -12,7 +13,10 @@ export type DailyMarginPoint = {
   cogsValid: number;            // custo de produto (pedidos válidos sincronizados)
   cogsInvalid: number;          // custo operacional (troca/voucher/reenvio/zerado)
   cogsCoveragePct: number;      // cobertura DSers nos pedidos válidos
-  adSpend: number;              // mídia paga (Meta com gross-up + Google)
+  adSpend: number;              // mídia paga total (Meta com gross-up + Google)
+  adMetaRaw: number;            // gasto Meta sem imposto
+  adMetaTax: number;            // imposto sobre Meta (CIDE+IOF+ISS)
+  adGoogle: number;             // gasto Google
   gatewayFee: number;           // taxa Mercado Pago
   revenueTax: number;           // faturamento * REVENUE_TAX_RATE
   checkoutFee: number;          // faturamento * CHECKOUT_FEE_RATE
@@ -28,6 +32,9 @@ export type MarginTotals = {
   cogsInvalid: number;
   cogsCoveragePct: number;
   adSpend: number;
+  adMetaRaw: number;
+  adMetaTax: number;
+  adGoogle: number;
   gatewayFee: number;
   revenueTax: number;
   checkoutFee: number;
@@ -71,14 +78,27 @@ export async function getMarginAnalysis(
     getDailyAdSpend(dateFrom, dateTo),
   ]);
 
-  const adByDate = new Map<string, number>();
-  for (const a of ads) adByDate.set(a.date, a.total.spend);
+  const adByDate = new Map<
+    string,
+    { total: number; metaGross: number; google: number }
+  >();
+  for (const a of ads) {
+    adByDate.set(a.date, {
+      total: a.total.spend,
+      metaGross: a.meta.spend,
+      google: a.google.spend,
+    });
+  }
 
   const daily: DailyMarginPoint[] = costs.map((c) => {
     const faturamento = c.validRevenueTotal;
     const cogsValid = c.validCogs;
     const cogsInvalid = c.invalidCogs;
-    const adSpend = adByDate.get(c.date) ?? 0;
+    const ad = adByDate.get(c.date) ?? { total: 0, metaGross: 0, google: 0 };
+    const adSpend = ad.total;
+    const adMetaRaw = ad.metaGross / META_TAX_MULTIPLIER;
+    const adMetaTax = ad.metaGross - adMetaRaw;
+    const adGoogle = ad.google;
     const gatewayFee = c.mpFee;
     const revenueTax = faturamento * REVENUE_TAX_RATE;
     const checkoutFee = faturamento * CHECKOUT_FEE_RATE;
@@ -98,6 +118,9 @@ export async function getMarginAnalysis(
       cogsInvalid,
       cogsCoveragePct: c.validCoveragePct,
       adSpend,
+      adMetaRaw,
+      adMetaTax,
+      adGoogle,
       gatewayFee,
       revenueTax,
       checkoutFee,
@@ -114,6 +137,9 @@ export async function getMarginAnalysis(
       acc.cogsValid += p.cogsValid;
       acc.cogsInvalid += p.cogsInvalid;
       acc.adSpend += p.adSpend;
+      acc.adMetaRaw += p.adMetaRaw;
+      acc.adMetaTax += p.adMetaTax;
+      acc.adGoogle += p.adGoogle;
       acc.gatewayFee += p.gatewayFee;
       acc.revenueTax += p.revenueTax;
       acc.checkoutFee += p.checkoutFee;
@@ -124,6 +150,9 @@ export async function getMarginAnalysis(
       cogsValid: 0,
       cogsInvalid: 0,
       adSpend: 0,
+      adMetaRaw: 0,
+      adMetaTax: 0,
+      adGoogle: 0,
       gatewayFee: 0,
       revenueTax: 0,
       checkoutFee: 0,

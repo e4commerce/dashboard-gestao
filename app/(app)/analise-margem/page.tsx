@@ -229,8 +229,36 @@ export default async function AnaliseMargemPage({
                     <td className="py-2 pr-3 text-right tabular-nums text-fg-secondary">
                       {p.cogsValid > 0 ? formatBRL(p.cogsValid) : "—"}
                     </td>
-                    <td className="py-2 pr-3 text-right tabular-nums text-fg-secondary">
-                      {p.adSpend > 0 ? formatBRL(p.adSpend) : "—"}
+                    <td className="group relative py-2 pr-3 text-right tabular-nums text-fg-secondary">
+                      {p.adSpend > 0 ? (
+                        <span className="cursor-help underline decoration-dotted decoration-fg-muted underline-offset-2">
+                          {formatBRL(p.adSpend)}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                      {p.adSpend > 0 ? (
+                        <div className="pointer-events-none invisible absolute right-0 top-full z-20 mt-1 w-48 rounded-md border border-border-default bg-surface-card p-3 text-left shadow-lg group-hover:visible">
+                          <div className="mb-1 flex justify-between gap-3 text-[11px]">
+                            <span className="text-fg-muted">Meta ads</span>
+                            <span className="font-medium tabular-nums text-fg-primary">
+                              {formatBRL(p.adMetaRaw)}
+                            </span>
+                          </div>
+                          <div className="mb-1 flex justify-between gap-3 text-[11px]">
+                            <span className="text-fg-muted">Imposto Meta</span>
+                            <span className="font-medium tabular-nums text-fg-primary">
+                              {formatBRL(p.adMetaTax)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between gap-3 text-[11px]">
+                            <span className="text-fg-muted">Google ads</span>
+                            <span className="font-medium tabular-nums text-fg-primary">
+                              {formatBRL(p.adGoogle)}
+                            </span>
+                          </div>
+                        </div>
+                      ) : null}
                     </td>
                     <td className="group relative py-2 pr-3 text-right tabular-nums text-fg-secondary">
                       {(() => {
@@ -321,8 +349,30 @@ export default async function AnaliseMargemPage({
                   <td className="pt-3 pr-3 text-right tabular-nums text-fg-primary">
                     {formatBRL(totals.cogsValid)}
                   </td>
-                  <td className="pt-3 pr-3 text-right tabular-nums text-fg-primary">
-                    {formatBRL(totals.adSpend)}
+                  <td className="group relative pt-3 pr-3 text-right tabular-nums text-fg-primary">
+                    <span className="cursor-help underline decoration-dotted decoration-fg-muted underline-offset-2">
+                      {formatBRL(totals.adSpend)}
+                    </span>
+                    <div className="pointer-events-none invisible absolute right-0 bottom-full z-20 mb-1 w-48 rounded-md border border-border-default bg-surface-card p-3 text-left font-normal shadow-lg group-hover:visible">
+                      <div className="mb-1 flex justify-between gap-3 text-[11px]">
+                        <span className="text-fg-muted">Meta ads</span>
+                        <span className="font-medium tabular-nums text-fg-primary">
+                          {formatBRL(totals.adMetaRaw)}
+                        </span>
+                      </div>
+                      <div className="mb-1 flex justify-between gap-3 text-[11px]">
+                        <span className="text-fg-muted">Imposto Meta</span>
+                        <span className="font-medium tabular-nums text-fg-primary">
+                          {formatBRL(totals.adMetaTax)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-3 text-[11px]">
+                        <span className="text-fg-muted">Google ads</span>
+                        <span className="font-medium tabular-nums text-fg-primary">
+                          {formatBRL(totals.adGoogle)}
+                        </span>
+                      </div>
+                    </div>
                   </td>
                   <td className="group relative pt-3 pr-3 text-right tabular-nums text-fg-primary">
                     <span className="cursor-help underline decoration-dotted decoration-fg-muted underline-offset-2">
