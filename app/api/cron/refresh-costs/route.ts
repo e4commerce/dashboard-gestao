@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { syncCogs } from "@/server/cogs/sync";
+import { runCogsSync } from "@/server/cogs/sync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,8 +35,8 @@ async function handle(req: Request) {
   const dateFrom = new Date(dateTo.getTime() - days * 24 * 60 * 60 * 1000);
 
   try {
-    const result = await syncCogs(dateFrom, dateTo);
-    return NextResponse.json({ ok: true, ...result });
+    const { logId, result } = await runCogsSync(dateFrom, dateTo, "cron");
+    return NextResponse.json({ ok: true, logId, ...result });
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "Unknown error" },

@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "@/server/db/client";
-import { orders } from "@/server/db/schema";
+import { cogsSyncLogs, orders } from "@/server/db/schema";
 import { and, eq, gte, lt, sql } from "drizzle-orm";
 import { fetchDsersOrders, type DsersOrder } from "@/server/dsers/client";
 
@@ -160,4 +160,104 @@ export async function getLastSyncTimestamp(): Promise<Date | null> {
   const raw = row?.latest;
   if (raw == null) return null;
   return raw instanceof Date ? raw : new Date(raw);
+}
+
+async function executeCogsSync(
+  logId: number,
+  dateFrom: Date,
+  dateTo: Date,
+): Promise<CogsSyncResult> {
+  try {
+    const result = await syncCogs(dateFrom, dateTo);
+    await db
+      .update(cogsSyncLogs)
+      .set({
+        status: "completed",
+        totalDsersOrders: result.totalDsersOrders,
+        ourOrdersInRange: result.ourOrdersInRange,
+        ourOrdersWithName: result.ourOrdersWithName,
+        matched: result.matched,
+        cleared: result.cleared,
+        failedChunks: JSON.stringify(result.failedChunks),
+        unmatchedSample: JSON.stringify(result.unmatchedSample),
+        executionTimeMs: result.durationMs,
+        completedAt: new Date(),
+      })
+      .where(eq(cogsSyncLogs.id, logId));
+    return result;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await db
+      .update(cogsSyncLogs)
+      .set({
+        status: "failed",
+        errorMessage: message,
+        completedAt: new Date(),
+      })
+      .where(eq(cogsSyncLogs.id, logId));
+    throw err;
+  }
+}
+
+// Cria log e dispara o sync em background; retorna o logId imediatamente.
+export async function startCogsSyncBackground(
+  dateFrom: Date,
+  dateTo: Date,
+  source: "manual" | "cron" = "manual",
+): Promise<{ logId: number }> {
+  const [log] = await db
+    .insert(cogsSyncLogs)
+    .values({ source, status: "running", dateFrom, dateTo })
+    .returning({ id: cogsSyncLogs.id });
+
+  void executeCogsSync(log.id, dateFrom, dateTo).catch((err) => {
+    console.error("[cogs-sync:bg] background sync failed", err);
+  });
+
+  return { logId: log.id };
+}
+
+// Variante síncrona: cria log, executa, e retorna o resultado. Usada pelo cron.
+export async function runCogsSync(
+  dateFrom: Date,
+  dateTo: Date,
+  source: "manual" | "cron" = "manual",
+): Promise<{ logId: number; result: CogsSyncResult }> {
+  const [log] = await db
+    .insert(cogsSyncLogs)
+    .values({ source, status: "running", dateFrom, dateTo })
+    .returning({ id: cogsSyncLogs.id });
+
+  const result = await executeCogsSync(log.id, dateFrom, dateTo);
+  return { logId: log.id, result };
+}
+
+export async function getRecentCogsSyncLogs(limit = 10) {
+  return db
+    .select()
+    .from(cogsSyncLogs)
+    .orderBy(sql`${cogsSyncLogs.startedAt} DESC`)
+    .limit(limit);
+}
+
+export async function isCogsSyncRunning(): Promise<boolean> {
+  const [row] = await db
+    .select({ id: cogsSyncLogs.id })
+    .from(cogsSyncLogs)
+    .where(eq(cogsSyncLogs.status, "running"))
+    .limit(1);
+  return Boolean(row);
+}
+
+export async function cleanupOrphanedCogsSyncs(): Promise<number> {
+  const result = await db
+    .update(cogsSyncLogs)
+    .set({
+      status: "failed",
+      errorMessage: "Interrompida pelo restart do servidor",
+      completedAt: new Date(),
+    })
+    .where(eq(cogsSyncLogs.status, "running"))
+    .returning({ id: cogsSyncLogs.id });
+  return result.length;
 }

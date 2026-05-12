@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/layout/page-header";
 import { getRecentExtractionLogs } from "@/server/etl/extract";
+import { AutoRefreshOnSync } from "@/components/auto-refresh-on-sync";
 import { ExtractForm } from "./extract-form";
 
 function fmtDate(d: Date | string | null): string {
@@ -29,6 +30,7 @@ export default async function ExtracoesPage() {
 
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-8">
+      <AutoRefreshOnSync channel="shopify" />
       <PageHeader
         title="Extrações"
         subtitle="Histórico de importações do Shopify"

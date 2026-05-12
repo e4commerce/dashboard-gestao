@@ -148,26 +148,12 @@ async function processBatch(
   }
 }
 
-export async function runExtraction(
+async function executeExtraction(
+  logId: number,
   dateFrom: Date,
   dateTo: Date,
-  source: "shopify" | "manual" = "manual",
-): Promise<{
-  logId: number;
-  stats: ExtractionStats;
-  durationMs: number;
-}> {
+): Promise<{ stats: ExtractionStats; durationMs: number }> {
   const startedAt = Date.now();
-  const [log] = await db
-    .insert(extractionLogs)
-    .values({
-      source,
-      status: "running",
-      dateFrom,
-      dateTo,
-    })
-    .returning({ id: extractionLogs.id });
-
   const stats: ExtractionStats = {
     ordersExtracted: 0,
     ordersNew: 0,
@@ -192,9 +178,9 @@ export async function runExtraction(
         executionTimeMs: durationMs,
         completedAt: new Date(),
       })
-      .where(eq(extractionLogs.id, log.id));
+      .where(eq(extractionLogs.id, logId));
 
-    return { logId: log.id, stats, durationMs };
+    return { stats, durationMs };
   } catch (err) {
     const durationMs = Date.now() - startedAt;
     const message = err instanceof Error ? err.message : String(err);
@@ -210,9 +196,48 @@ export async function runExtraction(
         executionTimeMs: durationMs,
         completedAt: new Date(),
       })
-      .where(eq(extractionLogs.id, log.id));
+      .where(eq(extractionLogs.id, logId));
     throw err;
   }
+}
+
+// Síncrono: usado pelo cron interno, que pode esperar a conclusão.
+export async function runExtraction(
+  dateFrom: Date,
+  dateTo: Date,
+  source: "shopify" | "manual" = "manual",
+): Promise<{
+  logId: number;
+  stats: ExtractionStats;
+  durationMs: number;
+}> {
+  const [log] = await db
+    .insert(extractionLogs)
+    .values({ source, status: "running", dateFrom, dateTo })
+    .returning({ id: extractionLogs.id });
+
+  const result = await executeExtraction(log.id, dateFrom, dateTo);
+  return { logId: log.id, ...result };
+}
+
+// Cria a log row e retorna o id imediatamente; o trabalho continua em background.
+// O Node mantém o processo vivo enquanto a promise não resolve, então sair da
+// tela ou recarregar não interrompe a extração.
+export async function startExtractionBackground(
+  dateFrom: Date,
+  dateTo: Date,
+  source: "shopify" | "manual" = "manual",
+): Promise<{ logId: number }> {
+  const [log] = await db
+    .insert(extractionLogs)
+    .values({ source, status: "running", dateFrom, dateTo })
+    .returning({ id: extractionLogs.id });
+
+  void executeExtraction(log.id, dateFrom, dateTo).catch((err) => {
+    console.error("[extract:bg] background extraction failed", err);
+  });
+
+  return { logId: log.id };
 }
 
 export async function getRecentExtractionLogs(limit = 10) {
@@ -221,4 +246,28 @@ export async function getRecentExtractionLogs(limit = 10) {
     .from(extractionLogs)
     .orderBy(sql`${extractionLogs.startedAt} DESC`)
     .limit(limit);
+}
+
+export async function isExtractionRunning(): Promise<boolean> {
+  const [row] = await db
+    .select({ id: extractionLogs.id })
+    .from(extractionLogs)
+    .where(eq(extractionLogs.status, "running"))
+    .limit(1);
+  return Boolean(row);
+}
+
+// Marca como "failed" qualquer extração travada com status "running".
+// Chamado no startup do servidor pra cobrir crashes/redeploys.
+export async function cleanupOrphanedExtractions(): Promise<number> {
+  const result = await db
+    .update(extractionLogs)
+    .set({
+      status: "failed",
+      errorMessage: "Interrompida pelo restart do servidor",
+      completedAt: new Date(),
+    })
+    .where(eq(extractionLogs.status, "running"))
+    .returning({ id: extractionLogs.id });
+  return result.length;
 }

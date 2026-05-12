@@ -23,6 +23,15 @@ export const extractionSourceEnum = pgEnum("extraction_source", [
   "shopify",
   "manual",
 ]);
+export const cogsSyncStatusEnum = pgEnum("cogs_sync_status", [
+  "running",
+  "completed",
+  "failed",
+]);
+export const cogsSyncSourceEnum = pgEnum("cogs_sync_source", [
+  "manual",
+  "cron",
+]);
 export const userRoleEnum = pgEnum("user_role", ["admin", "viewer"]);
 
 export const users = pgTable(
@@ -196,6 +205,31 @@ export const extractionLogs = pgTable(
   (t) => [index("extraction_logs_started_at_idx").on(t.startedAt)],
 );
 
+export const cogsSyncLogs = pgTable(
+  "cogs_sync_logs",
+  {
+    id: serial("id").primaryKey(),
+    source: cogsSyncSourceEnum("source").notNull().default("manual"),
+    status: cogsSyncStatusEnum("status").notNull().default("running"),
+    dateFrom: timestamp("date_from", { withTimezone: true }).notNull(),
+    dateTo: timestamp("date_to", { withTimezone: true }).notNull(),
+    totalDsersOrders: integer("total_dsers_orders"),
+    ourOrdersInRange: integer("our_orders_in_range"),
+    ourOrdersWithName: integer("our_orders_with_name"),
+    matched: integer("matched").notNull().default(0),
+    cleared: integer("cleared").notNull().default(0),
+    failedChunks: text("failed_chunks"),
+    unmatchedSample: text("unmatched_sample"),
+    errorMessage: text("error_message"),
+    executionTimeMs: integer("execution_time_ms"),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (t) => [index("cogs_sync_logs_started_at_idx").on(t.startedAt)],
+);
+
 // Insights diários de plataformas de anúncios (Google Ads, Meta, etc).
 // Granularidade: 1 linha por (platform, account_id, date). Forma genérica
 // para permitir adicionar Meta/TikTok futuramente sem migrar schema.
@@ -245,5 +279,6 @@ export type ChannelGoal = typeof channelGoals.$inferSelect;
 export type MonthlyGoal = typeof monthlyGoals.$inferSelect;
 export type DailyWeight = typeof dailyWeights.$inferSelect;
 export type ExtractionLog = typeof extractionLogs.$inferSelect;
+export type CogsSyncLog = typeof cogsSyncLogs.$inferSelect;
 export type AdsInsight = typeof adsInsights.$inferSelect;
 export type ServiceToken = typeof serviceTokens.$inferSelect;

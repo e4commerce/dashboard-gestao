@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/layout/page-header";
 import { MonthPicker } from "@/components/month-picker";
 import { CostsDailyTable } from "@/components/dashboard/costs-daily-table";
+import { AutoRefreshOnSync } from "@/components/auto-refresh-on-sync";
 import { SyncCogsButton } from "./sync-button";
 import {
   getCostsOverview,
@@ -8,6 +9,7 @@ import {
   getInvalidReasonBreakdown,
   type CostGroupSummary,
 } from "@/server/queries/costs";
+import { getRecentCogsSyncLogs } from "@/server/cogs/sync";
 import {
   parseMonthKey,
   toMonthKeySP,
@@ -112,6 +114,106 @@ function Field({
   );
 }
 
+const SYNC_STATUS_STYLES: Record<string, string> = {
+  completed: "text-status-success",
+  running: "text-status-info",
+  failed: "text-status-error",
+};
+
+function fmtDateTime(d: Date | string | null): string {
+  if (!d) return "—";
+  const date = typeof d === "string" ? new Date(d) : d;
+  return date.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function CogsSyncHistory({
+  logs,
+}: {
+  logs: Array<{
+    id: number;
+    status: string;
+    startedAt: Date | string;
+    completedAt: Date | string | null;
+    dateFrom: Date | string;
+    dateTo: Date | string;
+    matched: number;
+    cleared: number;
+    executionTimeMs: number | null;
+    errorMessage: string | null;
+  }>;
+}) {
+  return (
+    <section className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-6">
+      <div>
+        <h3 className="text-sm font-semibold text-fg-primary">
+          Histórico de sincronizações
+        </h3>
+        <p className="text-xs text-fg-muted">
+          Últimas execuções do sync com o DSers — atualiza automaticamente
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-border-subtle text-left">
+              <th className="pb-2 pr-4 font-medium text-fg-muted">Iniciado</th>
+              <th className="pb-2 pr-4 font-medium text-fg-muted">Status</th>
+              <th className="pb-2 pr-4 text-right font-medium text-fg-muted">
+                Confirmados
+              </th>
+              <th className="pb-2 pr-4 text-right font-medium text-fg-muted">
+                Limpos
+              </th>
+              <th className="pb-2 text-right font-medium text-fg-muted">
+                Duração
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border-subtle">
+            {logs.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="py-6 text-center text-fg-muted">
+                  Nenhuma sincronização registrada ainda.
+                </td>
+              </tr>
+            ) : (
+              logs.map((log) => (
+                <tr key={log.id}>
+                  <td className="py-2.5 pr-4 text-fg-secondary">
+                    {fmtDateTime(log.startedAt)}
+                  </td>
+                  <td
+                    className={`py-2.5 pr-4 font-medium ${SYNC_STATUS_STYLES[log.status] ?? "text-fg-muted"}`}
+                  >
+                    {log.status}
+                  </td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums text-status-success">
+                    {log.matched}
+                  </td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums text-fg-muted">
+                    {log.cleared}
+                  </td>
+                  <td className="py-2.5 text-right tabular-nums text-fg-secondary">
+                    {log.executionTimeMs
+                      ? `${(log.executionTimeMs / 1000).toFixed(1)}s`
+                      : "—"}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 function fmtLastSync(d: Date | null): string {
   if (!d) return "Nunca sincronizado";
   const diff = Date.now() - d.getTime();
@@ -134,10 +236,11 @@ export default async function CustosPage({
   const from = startOfMonthFromKey(month);
   const to = endOfMonthFromKey(month);
 
-  const [overview, daily, invalidBreakdown] = await Promise.all([
+  const [overview, daily, invalidBreakdown, syncLogs] = await Promise.all([
     getCostsOverview(from, to),
     getDailyCosts(from, to),
     getInvalidReasonBreakdown(from, to),
+    getRecentCogsSyncLogs(10),
   ]);
 
   const totalCogs = overview.valid.totalCogs + overview.invalid.totalCogs;
@@ -148,6 +251,7 @@ export default async function CustosPage({
 
   return (
     <div className="mx-auto flex max-w-[1200px] flex-col gap-6">
+      <AutoRefreshOnSync channel="cogs" />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <PageHeader
           title="Custos de Produto"
@@ -211,6 +315,9 @@ export default async function CustosPage({
 
       {/* ── Tabela diária ── */}
       <CostsDailyTable data={daily} />
+
+      {/* ── Histórico de sincronizações ── */}
+      <CogsSyncHistory logs={syncLogs} />
 
       {/* ── Breakdown dos inválidos por motivo ── */}
       <section className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-6">

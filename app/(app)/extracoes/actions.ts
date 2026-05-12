@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { runExtraction } from "@/server/etl/extract";
+import { startExtractionBackground } from "@/server/etl/extract";
 import { auth } from "@/auth";
 
 const inputSchema = z.object({
@@ -11,15 +11,9 @@ const inputSchema = z.object({
 });
 
 export type ExtractActionState = {
-  status: "idle" | "running" | "ok" | "error";
+  status: "idle" | "started" | "error";
   message?: string;
-  stats?: {
-    ordersExtracted: number;
-    ordersNew: number;
-    ordersSkipped: number;
-    errorsCount: number;
-    durationMs: number;
-  };
+  logId?: number;
 };
 
 export async function extractAction(
@@ -43,13 +37,13 @@ export async function extractAction(
   try {
     const dateFrom = new Date(`${parsed.data.dateFrom}T00:00:00.000Z`);
     const dateTo = new Date(`${parsed.data.dateTo}T23:59:59.999Z`);
-    const result = await runExtraction(dateFrom, dateTo, "manual");
+    const { logId } = await startExtractionBackground(
+      dateFrom,
+      dateTo,
+      "manual",
+    );
     revalidatePath("/extracoes");
-    revalidatePath("/visao-geral");
-    return {
-      status: "ok",
-      stats: { ...result.stats, durationMs: result.durationMs },
-    };
+    return { status: "started", logId };
   } catch (err) {
     return {
       status: "error",

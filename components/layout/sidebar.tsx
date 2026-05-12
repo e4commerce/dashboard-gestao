@@ -1,5 +1,6 @@
 import { BarChart3, Target, Database, Route, Wallet, Megaphone } from "lucide-react";
 import { NavItem } from "./nav-item";
+import { SyncIndicator } from "./sync-indicator";
 
 export function Sidebar() {
   return (
@@ -36,6 +37,9 @@ export function Sidebar() {
           icon={<Database strokeWidth={1.75} />}
         />
       </nav>
+      <div className="mt-auto">
+        <SyncIndicator />
+      </div>
     </aside>
   );
 }

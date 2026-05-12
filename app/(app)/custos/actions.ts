@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
-import { syncCogs, type CogsSyncResult } from "@/server/cogs/sync";
+import { startCogsSyncBackground } from "@/server/cogs/sync";
 import {
   parseMonthKey,
   startOfMonthFromKey,
@@ -10,9 +10,9 @@ import {
 } from "@/lib/datetime";
 
 export type SyncCogsState = {
-  status: "idle" | "ok" | "error";
+  status: "idle" | "started" | "error";
   message?: string;
-  result?: CogsSyncResult;
+  logId?: number;
 };
 
 export async function syncCogsAction(
@@ -28,10 +28,9 @@ export async function syncCogsAction(
   try {
     const from = startOfMonthFromKey(month);
     const to = endOfMonthFromKey(month);
-    const result = await syncCogs(from, to);
+    const { logId } = await startCogsSyncBackground(from, to, "manual");
     revalidatePath("/custos");
-    revalidatePath("/visao-geral");
-    return { status: "ok", result };
+    return { status: "started", logId };
   } catch (err) {
     return {
       status: "error",

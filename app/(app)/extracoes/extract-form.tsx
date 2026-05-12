@@ -27,6 +27,7 @@ export function ExtractForm() {
         <span className="text-sm font-semibold text-fg-primary">Extrair Agora</span>
         <span className="text-xs text-fg-muted">
           Importa pedidos do Shopify no intervalo selecionado.
+          {" "}A extração roda em background — pode sair da página sem interromper.
         </span>
       </div>
 
@@ -58,16 +59,14 @@ export function ExtractForm() {
           disabled={pending}
           className="rounded-md bg-action-primary px-4 py-2 text-sm font-medium text-fg-on-dark transition-colors hover:bg-action-primary-hover disabled:opacity-60"
         >
-          {pending ? "Extraindo..." : "Extrair"}
+          {pending ? "Iniciando…" : "Extrair"}
         </button>
       </div>
 
-      {state.status === "ok" && state.stats ? (
-        <div className="rounded-md bg-status-success-muted px-3 py-2 text-xs text-status-success">
-          ✓ Extração concluída em {(state.stats.durationMs / 1000).toFixed(1)}s.
-          {" "}
-          {state.stats.ordersNew} novos, {state.stats.ordersSkipped} duplicados,{" "}
-          {state.stats.errorsCount} erros.
+      {state.status === "started" ? (
+        <div className="rounded-md bg-status-info/10 px-3 py-2 text-xs text-status-info">
+          ✓ Extração #{state.logId} iniciada. Acompanhe o status na tabela abaixo —
+          ela atualiza automaticamente.
         </div>
       ) : null}
 
