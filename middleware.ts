@@ -3,7 +3,13 @@ import type { NextRequest } from "next/server";
 import { auth } from "@/auth";
 
 const PUBLIC_PATHS = ["/login"];
-const PUBLIC_PREFIXES = ["/api/auth", "/api/cron", "/_next", "/favicon.ico"];
+const PUBLIC_PREFIXES = [
+  "/api/auth",
+  "/api/cron",
+  "/api/webhooks",
+  "/_next",
+  "/favicon.ico",
+];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
