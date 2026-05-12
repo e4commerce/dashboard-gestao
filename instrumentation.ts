@@ -83,10 +83,10 @@ export async function register() {
     { timezone: TZ },
   );
 
-  // Meta Ads insights — toda hora (últimos 30 dias, upsert idempotente).
+  // Meta Ads insights — a cada 15 min (últimos 30 dias, upsert idempotente).
   // Só roda se META_ACCESS_TOKEN estiver configurado.
   cron.schedule(
-    "15 * * * *",
+    "*/15 * * * *",
     async () => {
       if (!process.env.META_ACCESS_TOKEN) return;
       const to = new Date();
@@ -104,6 +104,6 @@ export async function register() {
   console.log(
     "[cron] scheduled — extract @ hourly, refresh-costs @ 03:30 " +
       TZ +
-      ", meta @ :15 every hour",
+      ", meta @ every 15 min",
   );
 }
