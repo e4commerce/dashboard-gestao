@@ -1,4 +1,12 @@
-import { BarChart3, Target, Database, Route, Wallet, Megaphone } from "lucide-react";
+import {
+  BarChart3,
+  Target,
+  Database,
+  Route,
+  Wallet,
+  Megaphone,
+  TrendingUp,
+} from "lucide-react";
 import { NavItem } from "./nav-item";
 import { SyncIndicator } from "./sync-indicator";
 
@@ -30,6 +38,11 @@ export function Sidebar() {
           href="/marketing"
           label="Marketing"
           icon={<Megaphone strokeWidth={1.75} />}
+        />
+        <NavItem
+          href="/analise-margem"
+          label="Análise de Margem"
+          icon={<TrendingUp strokeWidth={1.75} />}
         />
         <NavItem
           href="/extracoes"
