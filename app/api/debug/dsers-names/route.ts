@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/server/db/client";
-import { orders } from "@/server/db/schema";
+import { cogsSyncLogs, orders } from "@/server/db/schema";
 import { desc } from "drizzle-orm";
 
 export const runtime = "nodejs";
@@ -79,6 +79,27 @@ export async function GET() {
 
   const normalize = (s: string) => s.replace(/^#/, "").trim();
 
+  // Últimos 5 logs de sync — pra debugar falhas
+  const recentLogs = await db
+    .select({
+      id: cogsSyncLogs.id,
+      status: cogsSyncLogs.status,
+      source: cogsSyncLogs.source,
+      startedAt: cogsSyncLogs.startedAt,
+      completedAt: cogsSyncLogs.completedAt,
+      totalDsersOrders: cogsSyncLogs.totalDsersOrders,
+      ourOrdersInRange: cogsSyncLogs.ourOrdersInRange,
+      matched: cogsSyncLogs.matched,
+      cleared: cogsSyncLogs.cleared,
+      failedChunks: cogsSyncLogs.failedChunks,
+      unmatchedSample: cogsSyncLogs.unmatchedSample,
+      errorMessage: cogsSyncLogs.errorMessage,
+      executionTimeMs: cogsSyncLogs.executionTimeMs,
+    })
+    .from(cogsSyncLogs)
+    .orderBy(desc(cogsSyncLogs.startedAt))
+    .limit(5);
+
   return NextResponse.json({
     api_url: baseUrl,
     shopify_sample: dbSample.map((r) => ({
@@ -91,5 +112,6 @@ export async function GET() {
     dsers_orders_count: Array.isArray(raw?.orders) ? raw.orders.length : null,
     dsers_sample: dsersOrdersSample,
     dsers_error: dsersError,
+    recent_sync_logs: recentLogs,
   });
 }
