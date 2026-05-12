@@ -93,6 +93,14 @@ export async function syncCogs(
   const ourOrdersWithName = ourOrders.filter((o) => o.orderName).length;
   const now = new Date();
 
+  // Guard contra apagamento massivo: só limpamos COGS antigo se confiamos que
+  // a resposta do DSers é completa. Caso contrário (API vazia, chunks
+  // falhando), mantemos os dados existentes — vale mais ter estimativa
+  // desatualizada do que zero dado.
+  const dsersReturnedData = dsersOrders.length > 0;
+  const allChunksOk = failedChunks.length === 0;
+  const canTrustNotConfirmed = dsersReturnedData && allChunksOk;
+
   // Conjunto dos nomes que casaram para identificar os "unmatched do DSers"
   const matchedNames = new Set<string>();
 
@@ -116,9 +124,9 @@ export async function syncCogs(
         .where(eq(orders.id, o.id));
       matched++;
       matchedNames.add(norm);
-    } else if (o.cogsAmount !== null) {
-      // Tinha COGS (provavelmente estimado pela Profitfy) mas DSers não confirma
-      // → limpa, é dado não-confiável
+    } else if (o.cogsAmount !== null && canTrustNotConfirmed) {
+      // Tinha COGS mas DSers não confirma (e API respondeu completa)
+      // → limpa por ser dado não-confiável
       await db
         .update(orders)
         .set({
