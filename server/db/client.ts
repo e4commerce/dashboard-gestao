@@ -3,28 +3,42 @@ import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
 
-const connectionString = process.env.DATABASE_URL;
-
-if (!connectionString) {
-  throw new Error("DATABASE_URL is not defined");
-}
+// Lazy: o connection só é criado quando o `db` é efetivamente usado em runtime.
+// Isso evita que o build do Next.js (que importa módulos para coletar metadata
+// de páginas) estoure quando DATABASE_URL não está disponível em build-time.
 
 declare global {
   // eslint-disable-next-line no-var
   var __pgClient: ReturnType<typeof postgres> | undefined;
 }
 
-const client =
-  globalThis.__pgClient ??
-  postgres(connectionString, {
-    max: 10,
-    idle_timeout: 20,
-    connect_timeout: 10,
-  });
+function createDb() {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL is not defined");
 
-if (process.env.NODE_ENV !== "production") {
-  globalThis.__pgClient = client;
+  const client =
+    globalThis.__pgClient ??
+    postgres(url, {
+      max: 10,
+      idle_timeout: 20,
+      connect_timeout: 10,
+    });
+
+  if (process.env.NODE_ENV !== "production") {
+    globalThis.__pgClient = client;
+  }
+
+  return drizzle(client, { schema });
 }
 
-export const db = drizzle(client, { schema });
+let dbInstance: ReturnType<typeof createDb> | null = null;
+
+export const db = new Proxy({} as ReturnType<typeof createDb>, {
+  get(_target, prop) {
+    if (!dbInstance) dbInstance = createDb();
+    const value = Reflect.get(dbInstance as object, prop);
+    return typeof value === "function" ? value.bind(dbInstance) : value;
+  },
+});
+
 export { schema };
