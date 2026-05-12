@@ -1,0 +1,7 @@
+# Force npm install (not ci) to allow flexible dep resolution.
+# Necessary porque Railway/Nixpacks usa Node 22 (npm 10) e nosso lock pode
+# divergir do que npm 10 espera. `install` resolve em tempo de build em vez
+# de exigir lock exato como `ci` faria.
+
+[phases.install]
+cmds = ["npm install --no-audit --no-fund --include=dev"]
