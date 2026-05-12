@@ -42,12 +42,6 @@ function StatCard({ label, value, sub, accent = "neutral" }: StatCardProps) {
   );
 }
 
-function marginAccent(pct: number): "positive" | "neutral" | "negative" {
-  if (pct >= 15) return "positive";
-  if (pct >= 0) return "neutral";
-  return "negative";
-}
-
 function coverageClass(pct: number, hasRevenue: boolean): string {
   if (!hasRevenue) return "text-fg-muted";
   if (pct >= 90) return "text-status-success";
@@ -55,11 +49,10 @@ function coverageClass(pct: number, hasRevenue: boolean): string {
   return "text-status-warning";
 }
 
-function profitClass(value: number): string {
-  if (value > 0) return "text-status-success";
-  if (value < 0) return "text-status-error";
-  return "text-fg-muted";
-}
+// Tons leves para destacar pares de colunas (lucro + margem) sem competir
+// com os cards de resumo. status-info = azul suave, action-personalize = laranja.
+const PERF_COL_CLASS = "bg-status-info/[0.08]";
+const OP_COL_CLASS = "bg-action-personalize/[0.08]";
 
 const TAX_LABEL = `${(REVENUE_TAX_RATE * 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
 const CHECKOUT_LABEL = `${(CHECKOUT_FEE_RATE * 100).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%`;
@@ -91,27 +84,17 @@ export default async function AnaliseMargemPage({
         <StatCard
           label="Faturamento"
           value={formatBRL(totals.faturamento)}
-          sub="Pedidos válidos com COGS sincronizado"
+          sub="Pedidos válidos"
         />
         <StatCard
           label="Lucro performance"
           value={formatBRL(totals.performanceProfit)}
           sub={`Margem ${formatPercent(totals.performanceMargin, 1)}`}
-          accent={
-            totals.faturamento > 0
-              ? marginAccent(totals.performanceMargin)
-              : "neutral"
-          }
         />
         <StatCard
           label="Lucro operacional"
           value={formatBRL(totals.operationalProfit)}
           sub={`Margem ${formatPercent(totals.operationalMargin, 1)}`}
-          accent={
-            totals.faturamento > 0
-              ? marginAccent(totals.operationalMargin)
-              : "neutral"
-          }
         />
         <StatCard
           label="Custo op. (inválidos)"
@@ -159,9 +142,9 @@ export default async function AnaliseMargemPage({
             Lucro diário
           </h3>
           <p className="text-xs text-fg-muted">
-            Faturamento conta apenas pedidos com COGS sincronizado · Performance
-            = sem custos de pedidos inválidos · Operacional = com custos de
-            troca, voucher, reenvio e zerados
+            Lucro considera apenas pedidos com COGS sincronizado · Performance =
+            sem custos de pedidos inválidos · Operacional = com custos de troca,
+            voucher, reenvio e zerados
           </p>
         </div>
 
@@ -197,16 +180,24 @@ export default async function AnaliseMargemPage({
                 >
                   Custo op.
                 </th>
-                <th className="pb-2 pr-3 text-right font-medium text-fg-muted">
+                <th
+                  className={`pb-2 pr-3 text-right font-medium text-fg-muted ${PERF_COL_CLASS}`}
+                >
                   Lucro perf.
                 </th>
-                <th className="pb-2 pr-3 text-right font-medium text-fg-muted">
+                <th
+                  className={`pb-2 pr-3 text-right font-medium text-fg-muted ${PERF_COL_CLASS}`}
+                >
                   Margem perf.
                 </th>
-                <th className="pb-2 pr-3 text-right font-medium text-fg-muted">
+                <th
+                  className={`pb-2 pr-3 text-right font-medium text-fg-muted ${OP_COL_CLASS}`}
+                >
                   Lucro op.
                 </th>
-                <th className="pb-2 text-right font-medium text-fg-muted">
+                <th
+                  className={`pb-2 text-right font-medium text-fg-muted ${OP_COL_CLASS}`}
+                >
                   Margem op.
                 </th>
               </tr>
@@ -303,22 +294,22 @@ export default async function AnaliseMargemPage({
                       {p.cogsInvalid > 0 ? formatBRL(p.cogsInvalid) : "—"}
                     </td>
                     <td
-                      className={`py-2 pr-3 text-right tabular-nums font-medium ${profitClass(p.performanceProfit)}`}
+                      className={`py-2 pr-3 text-right tabular-nums font-medium text-fg-primary ${PERF_COL_CLASS}`}
                     >
                       {hasRevenue ? formatBRL(p.performanceProfit) : "—"}
                     </td>
                     <td
-                      className={`py-2 pr-3 text-right tabular-nums ${profitClass(p.performanceProfit)}`}
+                      className={`py-2 pr-3 text-right tabular-nums text-fg-primary ${PERF_COL_CLASS}`}
                     >
                       {hasRevenue ? formatPercent(p.performanceMargin, 1) : "—"}
                     </td>
                     <td
-                      className={`py-2 pr-3 text-right tabular-nums font-medium ${profitClass(p.operationalProfit)}`}
+                      className={`py-2 pr-3 text-right tabular-nums font-medium text-fg-primary ${OP_COL_CLASS}`}
                     >
                       {hasRevenue ? formatBRL(p.operationalProfit) : "—"}
                     </td>
                     <td
-                      className={`py-2 text-right tabular-nums ${profitClass(p.operationalProfit)}`}
+                      className={`py-2 text-right tabular-nums text-fg-primary ${OP_COL_CLASS}`}
                     >
                       {hasRevenue ? formatPercent(p.operationalMargin, 1) : "—"}
                     </td>
@@ -412,24 +403,24 @@ export default async function AnaliseMargemPage({
                     {totals.cogsInvalid > 0 ? formatBRL(totals.cogsInvalid) : "—"}
                   </td>
                   <td
-                    className={`pt-3 pr-3 text-right tabular-nums ${profitClass(totals.performanceProfit)}`}
+                    className={`pt-3 pr-3 text-right tabular-nums text-fg-primary ${PERF_COL_CLASS}`}
                   >
                     {formatBRL(totals.performanceProfit)}
                   </td>
                   <td
-                    className={`pt-3 pr-3 text-right tabular-nums ${profitClass(totals.performanceProfit)}`}
+                    className={`pt-3 pr-3 text-right tabular-nums text-fg-primary ${PERF_COL_CLASS}`}
                   >
                     {totals.faturamento > 0
                       ? formatPercent(totals.performanceMargin, 1)
                       : "—"}
                   </td>
                   <td
-                    className={`pt-3 pr-3 text-right tabular-nums ${profitClass(totals.operationalProfit)}`}
+                    className={`pt-3 pr-3 text-right tabular-nums text-fg-primary ${OP_COL_CLASS}`}
                   >
                     {formatBRL(totals.operationalProfit)}
                   </td>
                   <td
-                    className={`pt-3 text-right tabular-nums ${profitClass(totals.operationalProfit)}`}
+                    className={`pt-3 text-right tabular-nums text-fg-primary ${OP_COL_CLASS}`}
                   >
                     {totals.faturamento > 0
                       ? formatPercent(totals.operationalMargin, 1)

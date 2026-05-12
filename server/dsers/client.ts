@@ -1,8 +1,13 @@
 import "server-only";
 
 export type DsersOrder = {
+  dsersOrderId: string;
   name: string;
+  productCostCents: number;
+  shippingCostCents: number;
   totalCostCents: number;
+  // Resposta crua do DSers — preservada para snapshot durável no banco
+  raw: unknown;
 };
 
 type DsersResponse = {
@@ -13,6 +18,7 @@ type DsersResponse = {
     totalCost: { settingMoney: string };
     productCost: { settingMoney: string };
     shippingCost: { settingMoney: string };
+    [key: string]: unknown;
   }>;
 };
 
@@ -60,7 +66,11 @@ export async function fetchDsersOrders(
 
   const data = (await res.json()) as DsersResponse;
   return (data.orders ?? []).map((o) => ({
+    dsersOrderId: o.id,
     name: o.name,
+    productCostCents: parseInt(o.productCost?.settingMoney ?? "0", 10),
+    shippingCostCents: parseInt(o.shippingCost?.settingMoney ?? "0", 10),
     totalCostCents: parseInt(o.totalCost?.settingMoney ?? "0", 10),
+    raw: o,
   }));
 }

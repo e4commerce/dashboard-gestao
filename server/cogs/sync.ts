@@ -1,6 +1,11 @@
 import "server-only";
 import { db } from "@/server/db/client";
-import { cogsSyncLogs, orders } from "@/server/db/schema";
+import {
+  cogsSyncLogs,
+  dsersOrders as dsersOrdersTable,
+  orderCogsHistory,
+  orders,
+} from "@/server/db/schema";
 import { and, eq, gte, lt, sql } from "drizzle-orm";
 import { fetchDsersOrders, type DsersOrder } from "@/server/dsers/client";
 
@@ -77,22 +82,59 @@ async function fetchDsersChunked(
 export async function syncCogs(
   dateFrom: Date,
   dateTo: Date,
+  syncLogId?: number,
 ): Promise<CogsSyncResult> {
   const startedAt = Date.now();
 
-  // 1. Busca pedidos efetivamente processados no DSers (fonte da verdade).
+  // 1. Busca pedidos efetivamente processados no DSers.
   // Chunked por dia porque a API trava em ranges maiores.
   const { orders: dsersOrders, failedChunks } = await fetchDsersChunked(
     dateFrom,
     dateTo,
   );
 
+  const now = new Date();
+
+  // 2. Snapshot durável: UPSERT cada pedido do DSers em dsers_orders.
+  // Esta tabela é a memória persistente — se a API quebrar amanhã, os custos
+  // que ela já entregou ficam preservados aqui e podem ser usados para
+  // reconstruir COGS futuramente.
+  for (const d of dsersOrders) {
+    if (!d.dsersOrderId) continue;
+    await db
+      .insert(dsersOrdersTable)
+      .values({
+        dsersOrderId: d.dsersOrderId,
+        orderName: d.name ? normalize(d.name) : null,
+        productCostCents: d.productCostCents,
+        shippingCostCents: d.shippingCostCents,
+        totalCostCents: d.totalCostCents,
+        rawJson: d.raw as object,
+        firstSeenAt: now,
+        lastSeenAt: now,
+        lastSyncId: syncLogId ?? null,
+      })
+      .onConflictDoUpdate({
+        target: dsersOrdersTable.dsersOrderId,
+        set: {
+          orderName: d.name ? normalize(d.name) : null,
+          productCostCents: d.productCostCents,
+          shippingCostCents: d.shippingCostCents,
+          totalCostCents: d.totalCostCents,
+          rawJson: d.raw as object,
+          lastSeenAt: now,
+          lastSyncId: syncLogId ?? null,
+          // firstSeenAt NÃO é tocado — preserva a data da primeira observação
+        },
+      });
+  }
+
   const dsersByName = new Map<string, number>();
   for (const d of dsersOrders) {
     if (d.name) dsersByName.set(normalize(d.name), d.totalCostCents / 100);
   }
 
-  // 2. Pedidos do nosso DB no mesmo período
+  // 3. Pedidos do nosso DB no mesmo período
   const ourOrders = await db
     .select({
       id: orders.id,
@@ -103,60 +145,46 @@ export async function syncCogs(
     .where(and(gte(orders.createdAt, dateFrom), lt(orders.createdAt, dateTo)));
 
   const ourOrdersWithName = ourOrders.filter((o) => o.orderName).length;
-  const now = new Date();
-
-  const dsersReturnedData = dsersOrders.length > 0;
-  const allChunksOk = failedChunks.length === 0;
-
-  // Conjunto dos nomes que casaram para identificar os "unmatched do DSers"
   const matchedNames = new Set<string>();
-  // IDs de pedidos que tinham COGS mas o DSers não confirmou — candidatos a limpar
-  const toClear: number[] = [];
-
   let matched = 0;
 
+  // 4. Para cada pedido nosso, se o DSers confirma e o valor mudou,
+  // atualiza e grava no histórico. Se DSers não confirma, não faz nada
+  // (NUNCA limpa automaticamente — usuário precisa limpar manualmente).
   for (const o of ourOrders) {
     if (!o.orderName) continue;
     const norm = normalize(o.orderName);
     const dsersCost = dsersByName.get(norm);
 
-    if (dsersCost !== undefined) {
-      // Confirmado pelo DSers → atualiza com custo real
-      await db
-        .update(orders)
-        .set({
-          cogsAmount: dsersCost.toFixed(2),
-          cogsSource: "dsers",
-          cogsUpdatedAt: now,
-        })
-        .where(eq(orders.id, o.id));
-      matched++;
-      matchedNames.add(norm);
-    } else if (o.cogsAmount !== null && dsersReturnedData && allChunksOk) {
-      toClear.push(o.id);
-    }
-  }
+    if (dsersCost === undefined) continue;
 
-  // Guard duplo: só limpamos COGS existente se:
-  //   1. DSers respondeu sem falhas (dsersReturnedData && allChunksOk)
-  //   2. Pelo menos 1 pedido foi confirmado (matched > 0)
-  //
-  // matched = 0 com DSers retornando pedidos quase sempre indica divergência
-  // de formato nos nomes (ex: Profitfy retorna "1234" mas Shopify tem "#1234").
-  // Limpar nesse cenário apagaria dados válidos sem justificativa.
-  let cleared = 0;
-  if (matched > 0 && toClear.length > 0) {
-    for (const id of toClear) {
-      await db
-        .update(orders)
-        .set({
-          cogsAmount: null,
-          cogsSource: null,
-          cogsUpdatedAt: null,
-        })
-        .where(eq(orders.id, id));
-      cleared++;
-    }
+    matched++;
+    matchedNames.add(norm);
+
+    const newAmount = dsersCost.toFixed(2);
+    const currentAmount = o.cogsAmount;
+    const isFirstTime = currentAmount === null;
+    const valueChanged = !isFirstTime && currentAmount !== newAmount;
+
+    if (!isFirstTime && !valueChanged) continue; // já tem o mesmo valor, no-op
+
+    await db
+      .update(orders)
+      .set({
+        cogsAmount: newAmount,
+        cogsSource: "dsers",
+        cogsUpdatedAt: now,
+      })
+      .where(eq(orders.id, o.id));
+
+    await db.insert(orderCogsHistory).values({
+      orderId: o.id,
+      cogsAmount: newAmount,
+      cogsSource: "dsers",
+      changeReason: isFirstTime ? "dsers_initial" : "dsers_update",
+      syncLogId: syncLogId ?? null,
+      changedAt: now,
+    });
   }
 
   // Pedidos do DSers que não achamos no nosso banco (amostra para debug)
@@ -173,7 +201,7 @@ export async function syncCogs(
     ourOrdersInRange: ourOrders.length,
     ourOrdersWithName,
     matched,
-    cleared,
+    cleared: 0, // sync nunca mais limpa automaticamente
     failedChunks,
     unmatchedSample,
     durationMs: Date.now() - startedAt,
@@ -196,7 +224,7 @@ async function executeCogsSync(
   dateTo: Date,
 ): Promise<CogsSyncResult> {
   try {
-    const result = await syncCogs(dateFrom, dateTo);
+    const result = await syncCogs(dateFrom, dateTo, logId);
     await db
       .update(cogsSyncLogs)
       .set({

@@ -7,10 +7,13 @@ import { META_TAX_MULTIPLIER } from "@/server/meta/tax";
 export const REVENUE_TAX_RATE = 0.0172; // imposto
 export const CHECKOUT_FEE_RATE = 0.01;  // taxa de checkout
 
+// Receita / taxas exibidas são totais dos pedidos válidos (com ou sem COGS).
+// O lucro, no entanto, é calculado apenas com pedidos cujo COGS já foi
+// sincronizado — receita e custo precisam estar pareados para não distorcer.
 export type DailyMarginPoint = {
   date: string;
-  faturamento: number;          // receita dos pedidos válidos com COGS sincronizado
-  cogsValid: number;            // custo de produto (pedidos válidos sincronizados)
+  faturamento: number;          // receita total dos pedidos válidos
+  cogsValid: number;            // custo de produto (apenas pedidos sincronizados)
   cogsInvalid: number;          // custo operacional (troca/voucher/reenvio/zerado)
   cogsCoveragePct: number;      // cobertura DSers nos pedidos válidos
   adSpend: number;              // mídia paga total (Meta com gross-up + Google)
@@ -18,53 +21,40 @@ export type DailyMarginPoint = {
   adMetaTax: number;            // imposto sobre Meta (CIDE+IOF+ISS)
   adGoogle: number;             // gasto Google
   gatewayFee: number;           // taxa Mercado Pago
-  revenueTax: number;           // faturamento * REVENUE_TAX_RATE
-  checkoutFee: number;          // faturamento * CHECKOUT_FEE_RATE
-  performanceProfit: number;    // sem custos dos inválidos
-  operationalProfit: number;    // com custos dos inválidos
-  performanceMargin: number;    // % sobre faturamento
-  operationalMargin: number;    // % sobre faturamento
+  revenueTax: number;           // faturamento total * REVENUE_TAX_RATE
+  checkoutFee: number;          // faturamento total * CHECKOUT_FEE_RATE
+  performanceProfit: number;    // calc usa apenas pedidos sincronizados
+  operationalProfit: number;    // performance - cogsInvalid
+  performanceMargin: number;    // % sobre receita sincronizada
+  operationalMargin: number;    // % sobre receita sincronizada
 };
 
-export type MarginTotals = {
-  faturamento: number;
-  cogsValid: number;
-  cogsInvalid: number;
-  cogsCoveragePct: number;
-  adSpend: number;
-  adMetaRaw: number;
-  adMetaTax: number;
-  adGoogle: number;
-  gatewayFee: number;
-  revenueTax: number;
-  checkoutFee: number;
-  performanceProfit: number;
-  operationalProfit: number;
-  performanceMargin: number;
-  operationalMargin: number;
-};
+export type MarginTotals = Omit<DailyMarginPoint, "date">;
 
 export type MarginAnalysis = {
   daily: DailyMarginPoint[];
   totals: MarginTotals;
 };
 
-function profitFor(input: {
-  faturamento: number;
+// Lucro: receita e custo de produto pareados (só pedidos sincronizados).
+// Imposto e checkout proporcionais à receita sincronizada para manter o lucro
+// internamente consistente; mídia e gateway entram integrais (custos de canal).
+function computeProfits(input: {
+  syncedRevenue: number;
   cogsValid: number;
   cogsInvalid: number;
   adSpend: number;
   gatewayFee: number;
-  revenueTax: number;
-  checkoutFee: number;
 }) {
+  const syncedTax = input.syncedRevenue * REVENUE_TAX_RATE;
+  const syncedCheckout = input.syncedRevenue * CHECKOUT_FEE_RATE;
   const performance =
-    input.faturamento -
+    input.syncedRevenue -
     input.cogsValid -
     input.adSpend -
     input.gatewayFee -
-    input.revenueTax -
-    input.checkoutFee;
+    syncedTax -
+    syncedCheckout;
   const operational = performance - input.cogsInvalid;
   return { performance, operational };
 }
@@ -90,10 +80,11 @@ export async function getMarginAnalysis(
     });
   }
 
-  // Faturamento conta apenas pedidos com COGS sincronizado — assim o lucro
-  // pareia receita e custo de produto reais. Cobertura DSers indica o gap.
+  let totalSyncedRevenue = 0;
   const daily: DailyMarginPoint[] = costs.map((c) => {
-    const faturamento = c.validRevenue;
+    const faturamento = c.validRevenueTotal;
+    const syncedRevenue = c.validRevenue;
+    totalSyncedRevenue += syncedRevenue;
     const cogsValid = c.validCogs;
     const cogsInvalid = c.invalidCogs;
     const ad = adByDate.get(c.date) ?? { total: 0, metaGross: 0, google: 0 };
@@ -104,14 +95,12 @@ export async function getMarginAnalysis(
     const gatewayFee = c.mpFee;
     const revenueTax = faturamento * REVENUE_TAX_RATE;
     const checkoutFee = faturamento * CHECKOUT_FEE_RATE;
-    const { performance, operational } = profitFor({
-      faturamento,
+    const { performance, operational } = computeProfits({
+      syncedRevenue,
       cogsValid,
       cogsInvalid,
       adSpend,
       gatewayFee,
-      revenueTax,
-      checkoutFee,
     });
     return {
       date: c.date,
@@ -128,8 +117,10 @@ export async function getMarginAnalysis(
       checkoutFee,
       performanceProfit: performance,
       operationalProfit: operational,
-      performanceMargin: faturamento > 0 ? (performance / faturamento) * 100 : 0,
-      operationalMargin: faturamento > 0 ? (operational / faturamento) * 100 : 0,
+      performanceMargin:
+        syncedRevenue > 0 ? (performance / syncedRevenue) * 100 : 0,
+      operationalMargin:
+        syncedRevenue > 0 ? (operational / syncedRevenue) * 100 : 0,
     };
   });
 
@@ -163,15 +154,27 @@ export async function getMarginAnalysis(
 
   const validOrders = costs.reduce((s, c) => s + c.validOrders, 0);
   const validWithCogs = costs.reduce((s, c) => s + c.validOrdersWithCogs, 0);
-  const { performance, operational } = profitFor(sum);
+  const { performance, operational } = computeProfits({
+    syncedRevenue: totalSyncedRevenue,
+    cogsValid: sum.cogsValid,
+    cogsInvalid: sum.cogsInvalid,
+    adSpend: sum.adSpend,
+    gatewayFee: sum.gatewayFee,
+  });
 
   const totals: MarginTotals = {
     ...sum,
     cogsCoveragePct: validOrders > 0 ? (validWithCogs / validOrders) * 100 : 0,
     performanceProfit: performance,
     operationalProfit: operational,
-    performanceMargin: sum.faturamento > 0 ? (performance / sum.faturamento) * 100 : 0,
-    operationalMargin: sum.faturamento > 0 ? (operational / sum.faturamento) * 100 : 0,
+    performanceMargin:
+      totalSyncedRevenue > 0
+        ? (performance / totalSyncedRevenue) * 100
+        : 0,
+    operationalMargin:
+      totalSyncedRevenue > 0
+        ? (operational / totalSyncedRevenue) * 100
+        : 0,
   };
 
   return { daily, totals };

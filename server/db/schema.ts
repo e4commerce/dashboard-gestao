@@ -8,6 +8,7 @@ import {
   boolean,
   text,
   date,
+  jsonb,
   pgEnum,
   uniqueIndex,
   index,
@@ -39,6 +40,13 @@ export const mpSyncStatusEnum = pgEnum("mp_sync_status", [
 ]);
 export const mpSyncSourceEnum = pgEnum("mp_sync_source", ["manual", "cron"]);
 export const userRoleEnum = pgEnum("user_role", ["admin", "viewer"]);
+export const cogsChangeReasonEnum = pgEnum("cogs_change_reason", [
+  "dsers_initial", // primeira vez que o DSers informa o custo deste pedido
+  "dsers_update", // valor mudou em um sync subsequente
+  "manual_set", // usuário definiu manualmente
+  "manual_clear", // usuário limpou manualmente
+  "backfill", // import histórico ao criar a tabela
+]);
 
 export const users = pgTable(
   "users",
@@ -349,6 +357,57 @@ export const serviceTokens = pgTable("service_tokens", {
     .defaultNow(),
 });
 
+// Snapshot do estado atual de cada pedido segundo o DSers.
+// 1 linha por dsers_order_id. UPSERT — mantém first_seen_at, atualiza last_seen_at.
+// Independente da tabela `orders`: se a API quebrar, esta tabela preserva
+// tudo o que o DSers já entregou (pode ser usada para recuperar custos perdidos).
+export const dsersOrders = pgTable(
+  "dsers_orders",
+  {
+    dsersOrderId: varchar("dsers_order_id", { length: 64 }).primaryKey(),
+    orderName: varchar("order_name", { length: 64 }),
+    productCostCents: integer("product_cost_cents"),
+    shippingCostCents: integer("shipping_cost_cents"),
+    totalCostCents: integer("total_cost_cents"),
+    rawJson: jsonb("raw_json"),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lastSyncId: integer("last_sync_id"),
+  },
+  (t) => [
+    index("dsers_orders_order_name_idx").on(t.orderName),
+    index("dsers_orders_last_seen_idx").on(t.lastSeenAt),
+  ],
+);
+
+// Histórico append-only de mudanças no cogsAmount de cada pedido.
+// Permite reconstruir o valor em qualquer ponto no tempo + auditar origem
+// de cada alteração. Nunca é atualizado, só inserido.
+export const orderCogsHistory = pgTable(
+  "order_cogs_history",
+  {
+    id: serial("id").primaryKey(),
+    orderId: integer("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    cogsAmount: numeric("cogs_amount", { precision: 12, scale: 2 }),
+    cogsSource: varchar("cogs_source", { length: 32 }),
+    changeReason: cogsChangeReasonEnum("change_reason").notNull(),
+    syncLogId: integer("sync_log_id"),
+    changedAt: timestamp("changed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("order_cogs_history_order_idx").on(t.orderId),
+    index("order_cogs_history_changed_at_idx").on(t.changedAt),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type OrderAttribution = typeof orderAttribution.$inferSelect;
@@ -363,3 +422,5 @@ export type MpSyncLog = typeof mpSyncLogs.$inferSelect;
 export type AdsInsight = typeof adsInsights.$inferSelect;
 export type MetaAdAccount = typeof metaAdAccounts.$inferSelect;
 export type ServiceToken = typeof serviceTokens.$inferSelect;
+export type DsersOrderRecord = typeof dsersOrders.$inferSelect;
+export type OrderCogsHistoryRecord = typeof orderCogsHistory.$inferSelect;

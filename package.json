@@ -16,7 +16,8 @@
     "db:push": "drizzle-kit push",
     "test": "vitest run",
     "test:watch": "vitest",
-    "seed:user": "tsx scripts/seed-user.ts"
+    "seed:user": "tsx scripts/seed-user.ts",
+    "backfill:cogs-history": "tsx scripts/backfill-cogs-history.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
