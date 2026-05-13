@@ -29,6 +29,7 @@ export type Kpi = {
   format: "BRL" | "PERCENT";
   vsTarget?: number;
   targetReference?: number;
+  sub?: string;
   placeholder?: string;
 };
 
@@ -89,11 +90,29 @@ export async function getKpis(
       ? totals.faturamento / totals.faturamentoMeta
       : undefined;
 
+  const vsProfit =
+    totals.grossProfitMeta && totals.grossProfitMeta > 0
+      ? margin.totals.operationalProfit / totals.grossProfitMeta
+      : undefined;
+
+  // Delta de margem: diferença em pp entre margem atual e margem-meta proporcional
+  const targetMargin =
+    totals.grossProfitMeta && totals.faturamentoMeta && totals.faturamentoMeta > 0
+      ? (totals.grossProfitMeta / totals.faturamentoMeta) * 100
+      : null;
+  const marginDelta =
+    targetMargin !== null ? margin.totals.operationalMargin - targetMargin : null;
+  const marginSub =
+    targetMargin !== null && marginDelta !== null
+      ? `Meta ${formatPercent(targetMargin, 1)} · ${marginDelta >= 0 ? "+" : ""}${marginDelta.toFixed(1)}pp`
+      : undefined;
+
   return [
     {
       label: "Lucro Operacional",
       value: margin.totals.operationalProfit,
       format: "BRL",
+      vsTarget: vsProfit,
     },
     {
       label: "Faturamento",
@@ -105,6 +124,7 @@ export async function getKpis(
       label: "Margem Operacional",
       value: margin.totals.operationalMargin,
       format: "PERCENT",
+      sub: marginSub,
     },
   ];
 }

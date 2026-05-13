@@ -124,6 +124,7 @@ export type KpiResult = {
   ticketMedio: number;
   faturamentoMeta: number | null;
   grossProfitGoal: number | null;
+  grossProfitMeta: number | null; // proporcional aos dias transcorridos (igual a faturamentoMeta)
 };
 
 export async function getKpiTotals(
@@ -150,7 +151,10 @@ export async function getKpiTotals(
 
   let faturamentoMeta: number | null = null;
   let grossProfitGoal: number | null = null;
+  let grossProfitMeta: number | null = null;
   let totalMetaSoFar = 0;
+  let totalProfitMetaSoFar = 0;
+  let hasGpMeta = false;
   let foundAnyGoal = false;
 
   const monthDists = new Map<
@@ -178,6 +182,10 @@ export async function getKpiTotals(
     if (!dist) continue;
     const share = dist.dailyMetaShare.get(d.getUTCDate()) ?? 0;
     totalMetaSoFar += share;
+    if (dist.revenueGoal > 0 && dist.grossProfitGoal > 0) {
+      totalProfitMetaSoFar += (share / dist.revenueGoal) * dist.grossProfitGoal;
+      hasGpMeta = true;
+    }
     if (dist.revenueGoal > 0 || dist.grossProfitGoal > 0) foundAnyGoal = true;
   }
 
@@ -186,6 +194,7 @@ export async function getKpiTotals(
     let gpSum = 0;
     for (const dist of monthDists.values()) gpSum += dist.grossProfitGoal;
     if (gpSum > 0) grossProfitGoal = gpSum;
+    if (hasGpMeta) grossProfitMeta = totalProfitMetaSoFar;
   }
 
   return {
@@ -194,6 +203,7 @@ export async function getKpiTotals(
     ticketMedio,
     faturamentoMeta,
     grossProfitGoal,
+    grossProfitMeta,
   };
 }
 

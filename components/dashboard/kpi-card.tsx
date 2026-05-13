@@ -47,6 +47,11 @@ export function KpiCard({ kpi }: Props) {
           </span>
         </span>
       ) : null}
+      {kpi.sub ? (
+        <span className={`text-xs font-medium ${kpi.sub.includes("+") ? "text-status-success" : kpi.sub.includes("-") ? "text-status-error" : "text-fg-muted"}`}>
+          {kpi.sub}
+        </span>
+      ) : null}
     </article>
   );
 }
