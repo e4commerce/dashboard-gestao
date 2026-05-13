@@ -450,6 +450,24 @@ export const trackedSessions = pgTable(
   ],
 );
 
+export const emailOtps = pgTable(
+  "email_otps",
+  {
+    id: serial("id").primaryKey(),
+    email: varchar("email", { length: 320 }).notNull(),
+    codeHash: varchar("code_hash", { length: 255 }).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("email_otps_email_idx").on(t.email),
+    index("email_otps_expires_at_idx").on(t.expiresAt),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type OrderAttribution = typeof orderAttribution.$inferSelect;

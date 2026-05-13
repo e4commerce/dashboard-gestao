@@ -85,6 +85,13 @@
       "when": 1778691000000,
       "tag": "0011_strange_jubilee",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1778696441218,
+      "tag": "0012_nosy_darkhawk",
+      "breakpoints": true
     }
   ]
 }

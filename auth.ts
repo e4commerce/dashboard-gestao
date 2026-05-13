@@ -1,46 +1,38 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { db } from "@/server/db/client";
-import { users } from "@/server/db/schema";
+import { ALLOWED_EMAILS, getNameForEmail } from "@/server/auth/allowed-emails";
+import { verifyOtp } from "@/server/auth/otp";
 
 const credentialsSchema = z.object({
   email: z.string().email().toLowerCase(),
-  password: z.string().min(1),
+  otp_code: z.string().min(6).max(6),
 });
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 30 },
+  session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 365 }, // 1 year
   pages: { signIn: "/login" },
   providers: [
     Credentials({
       credentials: {
         email: { label: "E-mail", type: "email" },
-        password: { label: "Senha", type: "password" },
+        otp_code: { label: "Código", type: "text" },
       },
       async authorize(raw) {
         const parsed = credentialsSchema.safeParse(raw);
         if (!parsed.success) return null;
 
-        const { email, password } = parsed.data;
-        const [user] = await db
-          .select()
-          .from(users)
-          .where(eq(users.email, email))
-          .limit(1);
+        const { email, otp_code } = parsed.data;
+        if (!ALLOWED_EMAILS.has(email)) return null;
 
-        if (!user) return null;
-
-        const ok = await bcrypt.compare(password, user.passwordHash);
+        const ok = await verifyOtp(email, otp_code);
         if (!ok) return null;
 
         return {
-          id: String(user.id),
-          email: user.email,
-          name: user.name ?? user.email,
-          role: user.role,
+          id: email,
+          email,
+          name: getNameForEmail(email),
+          role: "admin",
         };
       },
     }),
