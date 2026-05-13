@@ -176,12 +176,11 @@ const ENDPOINT = '${endpoint}';
 
 analytics.subscribe('page_viewed', (event) => {
   try {
+    const ua = event.context?.navigator?.userAgent ?? null;
     const payload = {
       clientId: event.clientId,
       timestamp: event.timestamp,
-      userAgent: event.context && event.context.navigator
-        ? event.context.navigator.userAgent
-        : null,
+      userAgent: ua,
     };
 
     fetch(ENDPOINT, {
