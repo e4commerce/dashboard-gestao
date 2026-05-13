@@ -34,13 +34,13 @@ export function Sidebar() {
           label="Análise de Performance"
           icon={<Activity strokeWidth={1.75} />}
         />
-        <NavItem
+      </nav>
+      <div className="flex flex-col gap-3">
+        <NavItemCompact
           href="/dados"
           label="Dados"
           icon={<Database strokeWidth={1.75} />}
         />
-      </nav>
-      <div className="flex flex-col gap-3">
         <NavItemCompact
           href="/integracoes"
           label="Integrações"
