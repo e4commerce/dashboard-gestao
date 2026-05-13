@@ -97,7 +97,7 @@ export default async function MarketingPage({
         />
       </div>
 
-      <section className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-6">
+      <section className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-4 md:p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h3 className="text-sm font-semibold text-fg-primary">

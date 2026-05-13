@@ -99,7 +99,7 @@ export async function ScriptSetupCard({ collapsed = false }: Props) {
   }
 
   return (
-    <section className="rounded-lg border border-border-default bg-surface-card p-6">
+    <section className="rounded-lg border border-border-default bg-surface-card p-4 md:p-6">
       <h3 className="mb-2 text-sm font-semibold text-fg-primary">
         Configure o Google Ads Script
       </h3>

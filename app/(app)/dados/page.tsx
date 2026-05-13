@@ -102,7 +102,7 @@ function GroupAnalysisCard({
   variant: "valid" | "invalid";
 }) {
   return (
-    <section className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-6">
+    <section className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-4 md:p-6">
       <div>
         <h3 className="text-sm font-semibold text-fg-primary">{title}</h3>
         <p className="text-xs text-fg-muted">{subtitle}</p>
@@ -237,7 +237,7 @@ async function CustosTab({ from, to }: { from: Date; to: Date }) {
 
       <CostsDailyTable data={daily} />
 
-      <section className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-6">
+      <section className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-4 md:p-6">
         <div>
           <h3 className="text-sm font-semibold text-fg-primary">Custo operacional por motivo</h3>
           <p className="text-xs text-fg-muted">
@@ -325,7 +325,7 @@ async function MarketingTab({ from, to }: { from: Date; to: Date }) {
         />
       </div>
 
-      <section className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-6">
+      <section className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-4 md:p-6">
         <div>
           <h3 className="text-sm font-semibold text-fg-primary">Investimento diário</h3>
           <p className="text-xs text-fg-muted">

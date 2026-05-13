@@ -35,7 +35,7 @@ export function MonthlyGoalForm({ month, revenueGoal, grossProfitGoal }: Props) 
   return (
     <form
       action={formAction}
-      className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-6"
+      className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-4 md:p-6"
     >
       <div className="flex flex-col gap-1">
         <span className="text-sm font-semibold text-fg-primary">

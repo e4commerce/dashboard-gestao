@@ -277,7 +277,7 @@ function SessionsSection({
   const lastSync = recentSessions[0]?.syncedAt ?? null;
 
   return (
-    <section className="flex flex-col gap-5 rounded-lg border border-border-default bg-surface-card p-6">
+    <section className="flex flex-col gap-5 rounded-lg border border-border-default bg-surface-card p-4 md:p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <div className="flex size-10 items-center justify-center rounded-md bg-surface-input text-fg-primary [&_svg]:size-5">
@@ -397,7 +397,7 @@ export default async function IntegracoesPage({
       </div>
 
       {/* ── Shopify ── */}
-      <section className="flex flex-col gap-5 rounded-lg border border-border-default bg-surface-card p-6">
+      <section className="flex flex-col gap-5 rounded-lg border border-border-default bg-surface-card p-4 md:p-6">
         <SectionHeader
           icon={<ShoppingBag strokeWidth={1.75} />}
           title="Shopify · Pedidos"
@@ -452,7 +452,7 @@ export default async function IntegracoesPage({
       </section>
 
       {/* ── Meta Ads ── */}
-      <section className="flex flex-col gap-5 rounded-lg border border-border-default bg-surface-card p-6">
+      <section className="flex flex-col gap-5 rounded-lg border border-border-default bg-surface-card p-4 md:p-6">
         <SectionHeader
           icon={<Megaphone strokeWidth={1.75} />}
           title="Meta Ads"
@@ -477,7 +477,7 @@ export default async function IntegracoesPage({
       </section>
 
       {/* ── Google Ads ── */}
-      <section className="flex flex-col gap-5 rounded-lg border border-border-default bg-surface-card p-6">
+      <section className="flex flex-col gap-5 rounded-lg border border-border-default bg-surface-card p-4 md:p-6">
         <SectionHeader
           icon={<Search strokeWidth={1.75} />}
           title="Google Ads"
@@ -505,7 +505,7 @@ export default async function IntegracoesPage({
       />
 
       {/* ── Mercado Pago ── */}
-      <section className="flex flex-col gap-5 rounded-lg border border-border-default bg-surface-card p-6">
+      <section className="flex flex-col gap-5 rounded-lg border border-border-default bg-surface-card p-4 md:p-6">
         <SectionHeader
           icon={<CreditCard strokeWidth={1.75} />}
           title="Mercado Pago"
@@ -547,7 +547,7 @@ export default async function IntegracoesPage({
       </section>
 
       {/* ── DSers ── */}
-      <section className="flex flex-col gap-5 rounded-lg border border-border-default bg-surface-card p-6">
+      <section className="flex flex-col gap-5 rounded-lg border border-border-default bg-surface-card p-4 md:p-6">
         <SectionHeader
           icon={<Package strokeWidth={1.75} />}
           title="DSers · COGS"

@@ -52,7 +52,7 @@ function GroupAnalysisCard({
   variant: "valid" | "invalid";
 }) {
   return (
-    <section className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-6">
+    <section className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-4 md:p-6">
       <div>
         <h3 className="text-sm font-semibold text-fg-primary">{title}</h3>
         <p className="text-xs text-fg-muted">{subtitle}</p>
@@ -224,7 +224,7 @@ export default async function CustosPage({
       <CostsDailyTable data={daily} />
 
       {/* ── Breakdown dos inválidos por motivo ── */}
-      <section className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-6">
+      <section className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-4 md:p-6">
         <div>
           <h3 className="text-sm font-semibold text-fg-primary">Custo operacional por motivo</h3>
           <p className="text-xs text-fg-muted">

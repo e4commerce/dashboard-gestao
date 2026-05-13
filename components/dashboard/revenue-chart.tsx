@@ -58,7 +58,7 @@ export function RevenueChart({ revenueData, profitData }: Props) {
         </div>
         <ModeToggle mode={mode} onChange={setMode} />
       </div>
-      <div className="h-[486px] w-full">
+      <div className="h-60 w-full sm:h-80 md:h-[486px]">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={data}

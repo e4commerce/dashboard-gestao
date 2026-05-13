@@ -12,7 +12,7 @@ import { SyncIndicator } from "./sync-indicator";
 
 export function Sidebar() {
   return (
-    <aside className="sticky top-0 flex h-screen flex-col gap-2 border-r border-border-default bg-surface-sidebar px-3 py-6">
+    <aside className="sticky top-0 hidden h-screen flex-col gap-2 border-r border-border-default bg-surface-sidebar px-3 py-6 md:flex">
       <nav className="my-auto flex flex-col gap-1">
         <NavItem
           href="/visao-geral"

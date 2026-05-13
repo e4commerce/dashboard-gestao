@@ -152,7 +152,7 @@ export default async function PerformancePage({
       </div>
 
       {/* ── Tabela diária ── */}
-      <section className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-6">
+      <section className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-4 md:p-6">
         <div>
           <h3 className="text-sm font-semibold text-fg-primary">
             Performance diária
@@ -163,7 +163,7 @@ export default async function PerformancePage({
           </p>
         </div>
 
-        <div>
+        <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-border-subtle text-left">

@@ -135,7 +135,7 @@ export function DailyWeightsGrid({
   return (
     <form
       action={formAction}
-      className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-6"
+      className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-4 md:p-6"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-1">
