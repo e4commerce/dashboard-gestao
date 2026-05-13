@@ -427,19 +427,27 @@ export const dailySessions = pgTable(
   ],
 );
 
-// Set de sessionIds (_shopify_s) já contabilizados — garante dedup
-// exato com a definição de sessão da Shopify (30 min inatividade).
-// É append-only; uma sessão = uma linha.
+// Sessões derivadas dos eventos page_viewed enviados pelo pixel.
+// 1 linha por sessão computada — regras: 30 min de inatividade encerra,
+// virada de dia em America/Sao_Paulo também encerra. Bots têm coluna
+// is_bot=true e ficam de fora do contador denormalizado em daily_sessions.
 export const trackedSessions = pgTable(
   "tracked_sessions",
   {
-    sessionId: varchar("session_id", { length: 128 }).primaryKey(),
-    date: date("date").notNull(),
-    trackedAt: timestamp("tracked_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    id: serial("id").primaryKey(),
+    clientId: varchar("client_id", { length: 64 }).notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    lastActivityAt: timestamp("last_activity_at", { withTimezone: true }).notNull(),
+    spDate: date("sp_date").notNull(),
+    pageViews: integer("page_views").notNull().default(1),
+    userAgent: text("user_agent"),
+    isBot: boolean("is_bot").notNull().default(false),
   },
-  (t) => [index("tracked_sessions_date_idx").on(t.date)],
+  (t) => [
+    index("tracked_sessions_client_idx").on(t.clientId),
+    index("tracked_sessions_last_activity_idx").on(t.lastActivityAt),
+    index("tracked_sessions_sp_date_idx").on(t.spDate),
+  ],
 );
 
 export type User = typeof users.$inferSelect;

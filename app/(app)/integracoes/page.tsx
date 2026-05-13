@@ -169,30 +169,26 @@ function buildPixelCode(appUrl: string): string {
   const endpoint = `${appUrl.replace(/\/$/, "")}/api/track/session`;
   return `// Dashboard Gestão — Web Pixel (sessões)
 // Instale em: Shopify Admin → Settings → Customer events → Add custom pixel
-// Usa o cookie _shopify_s (mesma sessão que a Shopify usa nos relatórios)
+// Envia todo page_viewed para o backend; agregação de sessão (30 min +
+// virada de dia em SP) e filtro de bot rodam server-side.
 
 const ENDPOINT = '${endpoint}';
-const KEY_LAST_SID = '_mg_last_sid';
 
-analytics.subscribe('page_viewed', async () => {
+analytics.subscribe('page_viewed', (event) => {
   try {
-    const sid = await browser.cookie.get('_shopify_s');
-    if (!sid) return;
-
-    const lastSent = await browser.localStorage.getItem(KEY_LAST_SID);
-    if (lastSent === sid) return;
-
-    const today = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'America/Sao_Paulo'
-    }).format(new Date());
-
-    await browser.localStorage.setItem(KEY_LAST_SID, sid);
+    const payload = {
+      clientId: event.clientId,
+      timestamp: event.timestamp,
+      userAgent: event.context && event.context.navigator
+        ? event.context.navigator.userAgent
+        : null,
+    };
 
     fetch(ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       keepalive: true,
-      body: JSON.stringify({ sessionId: sid, date: today }),
+      body: JSON.stringify(payload),
     });
   } catch (_) {}
 });`;
@@ -256,11 +252,12 @@ function SessionsSection({
       <div className="flex flex-col gap-1">
         <p className="text-xs font-medium text-fg-primary">Como funciona</p>
         <p className="text-xs text-fg-muted">
-          O pixel lê o cookie <code className="rounded bg-surface-input px-1 py-0.5 text-[10px]">_shopify_s</code>{" "}
-          — o mesmo identificador de sessão que a Shopify usa nos relatórios oficiais
-          (rotaciona após 30 min de inatividade). Cada sessionId novo é contado uma única vez,
-          com dedup adicional no servidor. Resultado deve bater com Analytics → Sessions do
-          Shopify Admin (margem ≤ 5%, fora bots filtrados pela Shopify).
+          O pixel envia todo evento <code className="rounded bg-surface-input px-1 py-0.5 text-[10px]">page_viewed</code> com{" "}
+          <code className="rounded bg-surface-input px-1 py-0.5 text-[10px]">clientId</code> (identificador
+          do visitante fornecido pela Shopify, sucessor do <code className="rounded bg-surface-input px-1 py-0.5 text-[10px]">_shopify_y</code>),
+          timestamp e User-Agent. O backend agrega em sessões: 30 min de inatividade encerra,
+          virada de dia em São Paulo encerra, bots conhecidos no User-Agent ficam de fora do
+          contador. Resultado deve bater com Analytics → Sessions do Shopify Admin (margem 1-3%).
         </p>
       </div>
 
