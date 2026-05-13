@@ -83,8 +83,7 @@ export function RevenueChart({ revenueData, profitData }: Props) {
               tick={{ fill: COLOR_AXIS, fontSize: 11 }}
               tickLine={false}
               axisLine={false}
-              interval={1}
-              minTickGap={16}
+              minTickGap={48}
             />
             <YAxis
               tickFormatter={formatCompactBRL}
