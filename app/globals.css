@@ -71,9 +71,11 @@
   --color-border-focus: var(--border-focus);
 
   --color-status-error: var(--status-error);
+  --color-status-error-muted: var(--status-error-muted);
   --color-status-success: var(--status-success);
   --color-status-success-muted: var(--status-success-muted);
   --color-status-warning: var(--status-warning);
+  --color-status-warning-muted: var(--status-warning-muted);
   --color-status-info: var(--status-info);
 
   /* Sombras do DS */
@@ -120,9 +122,11 @@
 
   /* Status */
   --status-error: #E57373;
+  --status-error-muted: rgb(229 115 115 / 0.15);
   --status-success: #4CAF50;
   --status-success-muted: rgb(76 175 80 / 0.15);
   --status-warning: #FFB74D;
+  --status-warning-muted: rgb(255 183 77 / 0.15);
   --status-info: #42A5F5;
 }
 
