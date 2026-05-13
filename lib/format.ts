@@ -34,30 +34,18 @@ export function formatDelta(delta: number): string {
 // calendário local do usuário independente do navegador/servidor.
 const SP_TZ = "America/Sao_Paulo";
 
+const MONTHS_PT_SHORT = [
+  "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
+  "Jul", "Ago", "Set", "Out", "Nov", "Dez",
+];
+
+// Entrada vem como `YYYY-MM-DD` truncado em America/Sao_Paulo pelas queries.
+// `new Date(iso)` interpretaria a string como UTC e a conversão de volta pra
+// SP (UTC-3) deslocaria 1 dia pra trás. Parsear os números direto da string
+// evita esse round-trip.
 export function formatDateLabel(iso: string): string {
-  const months = [
-    "Jan",
-    "Fev",
-    "Mar",
-    "Abr",
-    "Mai",
-    "Jun",
-    "Jul",
-    "Ago",
-    "Set",
-    "Out",
-    "Nov",
-    "Dez",
-  ];
-  const d = new Date(iso);
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: SP_TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(d);
-  const get = (t: string) => parseInt(parts.find((p) => p.type === t)!.value);
-  return `${get("day")} ${months[get("month") - 1]}`;
+  const [, m, d] = iso.split("-").map(Number);
+  return `${d} ${MONTHS_PT_SHORT[m - 1]}`;
 }
 
 export function formatLongDate(date: Date): string {
