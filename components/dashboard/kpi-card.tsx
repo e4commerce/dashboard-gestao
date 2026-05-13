@@ -62,11 +62,17 @@ export function KpiCard({ kpi }: Props) {
           </span>
         </span>
       ) : null}
-      {kpi.sub ? (
-        <span className={`text-xs font-medium ${kpi.sub.includes("+") ? "text-status-success" : kpi.sub.includes("-") ? "text-status-error" : "text-fg-muted"}`}>
-          {kpi.sub}
-        </span>
-      ) : null}
+      {kpi.sub ? (() => {
+        const positive = kpi.sub.includes("+");
+        const negative = kpi.sub.includes("-");
+        const bg = positive ? "bg-status-success-muted" : negative ? "bg-status-error-muted" : "bg-surface-card";
+        const text = positive ? "text-status-success" : negative ? "text-status-error" : "text-fg-muted";
+        return (
+          <span className={`inline-flex w-fit rounded-sm ${bg} px-2 py-1 text-xs font-medium ${text}`}>
+            {kpi.sub}
+          </span>
+        );
+      })() : null}
     </article>
   );
 }
