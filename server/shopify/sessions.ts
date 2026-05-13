@@ -1,45 +1,25 @@
 import "server-only";
-import { executeGraphQL } from "./graphql";
+import { getAccessToken, getStoreUrl } from "./auth";
+
+// shopifyqlQuery foi introduzida na 2022-10 e confirmada na 2024-04.
+// Usa versão própria para não depender da versão global em graphql.ts.
+const SESSIONS_API_VERSION = "2024-04";
 
 type ShopifyqlColumn = { name: string; dataType: string };
-
-type ShopifyqlTableData = {
-  rowData: string[][];
-  columns: ShopifyqlColumn[];
-};
-
 type ShopifyqlTableResponse = {
   __typename: "TableResponse";
-  tableData: ShopifyqlTableData;
+  tableData: {
+    rowData: string[][];
+    columns: ShopifyqlColumn[];
+  };
 };
-
-type ShopifyqlParseError = {
-  code: string;
-  message: string;
+type ShopifyqlParseError = { code: string; message: string };
+type ShopifyqlResult = {
+  shopifyqlQuery: (ShopifyqlTableResponse | { __typename: string }) & {
+    parseErrors?: ShopifyqlParseError[];
+  };
 };
-
-type ShopifyqlResponse =
-  | ShopifyqlTableResponse
-  | { __typename: string; parseErrors?: ShopifyqlParseError[] };
-
-type ShopifyqlQueryResult = {
-  shopifyqlQuery: ShopifyqlResponse & { parseErrors?: ShopifyqlParseError[] };
-};
-
-const SHOPIFYQL_MUTATION = `
-mutation shopifyqlQuery($query: String!) {
-  shopifyqlQuery(query: $query) {
-    __typename
-    ... on TableResponse {
-      tableData {
-        rowData
-        columns { name dataType }
-      }
-    }
-    parseErrors { code message }
-  }
-}
-`;
+type GqlResponse<T> = { data?: T; errors?: Array<{ message: string }> };
 
 export type DailySessionsRow = {
   date: string; // YYYY-MM-DD
@@ -50,17 +30,54 @@ export async function fetchDailySessions(
   dateFrom: Date,
   dateTo: Date,
 ): Promise<DailySessionsRow[]> {
+  const token = await getAccessToken();
+  const storeUrl = getStoreUrl();
   const since = dateFrom.toISOString().slice(0, 10);
   const until = dateTo.toISOString().slice(0, 10);
 
-  const query = `FROM sessions SINCE ${since} UNTIL ${until} GROUP BY day`;
-
-  const result = await executeGraphQL<ShopifyqlQueryResult>(
-    SHOPIFYQL_MUTATION,
-    { query },
+  const res = await fetch(
+    `https://${storeUrl}/admin/api/${SESSIONS_API_VERSION}/graphql.json`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": token,
+      },
+      body: JSON.stringify({
+        query: `
+          mutation RunShopifyQL($q: String!) {
+            shopifyqlQuery(query: $q) {
+              __typename
+              ... on TableResponse {
+                tableData {
+                  rowData
+                  columns { name dataType }
+                }
+              }
+              parseErrors { code message }
+            }
+          }
+        `,
+        variables: { q: `FROM sessions SINCE ${since} UNTIL ${until} GROUP BY day` },
+      }),
+    },
   );
 
-  const response = result.shopifyqlQuery;
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Shopify sessions HTTP ${res.status}: ${text}`);
+  }
+
+  const json = (await res.json()) as GqlResponse<ShopifyqlResult>;
+
+  if (json.errors && json.errors.length > 0) {
+    throw new Error(
+      `Shopify GraphQL errors: ${json.errors.map((e) => e.message).join("; ")}`,
+    );
+  }
+
+  const response = json.data?.shopifyqlQuery;
+  if (!response) throw new Error("Shopify sessions: no data returned");
 
   if (response.parseErrors && response.parseErrors.length > 0) {
     throw new Error(
@@ -72,20 +89,18 @@ export async function fetchDailySessions(
     throw new Error(`Unexpected ShopifyQL response type: ${response.__typename}`);
   }
 
-  const tableResponse = response as ShopifyqlTableResponse;
-  const { columns, rowData } = tableResponse.tableData;
+  const { columns, rowData } = (response as ShopifyqlTableResponse).tableData;
 
-  // Find column indexes dynamically — Shopify may return them in any order.
-  const dayIdx = columns.findIndex((c) =>
-    c.name === "day" || c.name === "session_date" || c.name === "date",
+  const dayIdx = columns.findIndex(
+    (c) => c.name === "day" || c.name === "session_date" || c.name === "date",
   );
-  const sessionsIdx = columns.findIndex((c) =>
-    c.name === "sessions" || c.name === "sessions_count" || c.name === "visits",
+  const sessionsIdx = columns.findIndex(
+    (c) => c.name === "sessions" || c.name === "sessions_count" || c.name === "visits",
   );
 
   if (dayIdx === -1 || sessionsIdx === -1) {
     throw new Error(
-      `ShopifyQL sessions: could not find expected columns. Got: ${columns.map((c) => c.name).join(", ")}`,
+      `ShopifyQL sessions: colunas inesperadas. Recebidas: ${columns.map((c) => c.name).join(", ")}`,
     );
   }
 
