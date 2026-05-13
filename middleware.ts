@@ -14,12 +14,17 @@ const PUBLIC_PREFIXES = [
   "/favicon.ico",
 ];
 
+// Qualquer request a um arquivo estático em /public (png, jpg, svg, etc)
+// — identificado pela extensão no path.
+const STATIC_FILE = /\.(?:png|jpe?g|gif|svg|webp|ico|avif|bmp|css|js|map|woff2?|ttf|otf|eot|txt|json|xml|pdf)$/i;
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (
     PUBLIC_PATHS.includes(pathname) ||
-    PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))
+    PUBLIC_PREFIXES.some((p) => pathname.startsWith(p)) ||
+    STATIC_FILE.test(pathname)
   ) {
     return NextResponse.next();
   }
