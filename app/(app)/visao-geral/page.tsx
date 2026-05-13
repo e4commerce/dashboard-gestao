@@ -31,12 +31,12 @@ export default async function VisaoGeralPage({
         <header className="flex flex-col gap-1">
           <span className="text-sm text-fg-muted">{today}</span>
           <Image
-            src="/tipografia-branco@4x.png"
+            src="/tipografia-branco-4x.png"
             alt="Murano"
             width={3169}
             height={782}
             priority
-            className="h-auto w-auto max-h-10"
+            className="h-10 w-auto"
           />
         </header>
         <MonthPicker month={month} />
