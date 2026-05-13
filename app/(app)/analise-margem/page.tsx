@@ -215,7 +215,7 @@ export default async function AnaliseMargemPage({
               {daily.map((p) => {
                 const hasRevenue = p.faturamento > 0;
                 return (
-                  <tr key={p.date} className="odd:bg-surface-input/30">
+                  <tr key={p.date} className="odd:bg-surface-input/60">
                     <td className="py-2 pr-3 font-medium text-fg-primary">
                       {formatDateLabel(p.date)}
                     </td>

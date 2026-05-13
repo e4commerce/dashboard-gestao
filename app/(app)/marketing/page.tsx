@@ -126,7 +126,7 @@ export default async function MarketingPage({
             </thead>
             <tbody>
               {daily.map((p) => (
-                <tr key={p.date} className="odd:bg-surface-input/30">
+                <tr key={p.date} className="odd:bg-surface-input/60">
                   <td className="py-2 pr-3 font-medium text-fg-primary">
                     {formatDateLabel(p.date)}
                   </td>
