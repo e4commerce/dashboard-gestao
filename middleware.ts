@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 
 const PUBLIC_PATHS = ["/login"];
 const PUBLIC_PREFIXES = [
+  "/api/admin",
   "/api/auth",
   "/api/cron",
   "/api/debug",

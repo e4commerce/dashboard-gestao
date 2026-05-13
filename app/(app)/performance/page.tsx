@@ -25,13 +25,14 @@ type ValueCellProps = {
   real: number | null;
   prev: number | null;
   format: Formatter;
+  className?: string;
 };
 
 // Cada célula mostra o realizado em destaque e o previsto em cinza embaixo,
 // pra deixar a comparação prev/real legível sem dobrar o número de colunas.
-function ValueCell({ real, prev, format }: ValueCellProps) {
+function ValueCell({ real, prev, format, className = "" }: ValueCellProps) {
   return (
-    <td className="py-2 pr-3 text-right tabular-nums">
+    <td className={`py-2 pr-3 text-right tabular-nums ${className}`}>
       <div className="font-medium text-fg-primary">
         {real !== null ? format(real) : <span className="text-fg-muted">—</span>}
       </div>
@@ -42,9 +43,9 @@ function ValueCell({ real, prev, format }: ValueCellProps) {
   );
 }
 
-function FootCell({ real, prev, format }: ValueCellProps) {
+function FootCell({ real, prev, format, className = "" }: ValueCellProps) {
   return (
-    <td className="pt-3 pr-3 text-right tabular-nums">
+    <td className={`pt-3 pr-3 text-right tabular-nums ${className}`}>
       <div className="font-semibold text-fg-primary">
         {real !== null ? format(real) : <span className="text-fg-muted">—</span>}
       </div>
@@ -54,6 +55,8 @@ function FootCell({ real, prev, format }: ValueCellProps) {
     </td>
   );
 }
+
+const PROFIT_COL_CLASS = "bg-status-info/[0.08]";
 
 function StatCard({
   label,
@@ -185,10 +188,10 @@ export default async function PerformancePage({
                 <th className="pb-2 pr-3 text-right font-medium text-fg-muted">
                   CPS
                 </th>
-                <th className="pb-2 pr-3 text-right font-medium text-fg-muted">
+                <th className={`pb-2 pr-3 text-right font-medium text-fg-muted ${PROFIT_COL_CLASS}`}>
                   Lucro bruto
                 </th>
-                <th className="pb-2 pr-3 text-right font-medium text-fg-muted">
+                <th className={`pb-2 pr-3 text-right font-medium text-fg-muted ${PROFIT_COL_CLASS}`}>
                   Margem bruta
                 </th>
                 <th className="pb-2 text-right font-medium text-fg-muted">
@@ -222,11 +225,13 @@ export default async function PerformancePage({
                     real={p.lucroBrutoReal}
                     prev={p.lucroBrutoPrev}
                     format={fmtMoney}
+                    className={PROFIT_COL_CLASS}
                   />
                   <ValueCell
                     real={p.margemBrutaReal}
                     prev={p.margemBrutaPrev}
                     format={fmtPct2}
+                    className={PROFIT_COL_CLASS}
                   />
                   <ValueCell real={p.cpaReal} prev={p.cpaPrev} format={fmtMoney2} />
                 </tr>
