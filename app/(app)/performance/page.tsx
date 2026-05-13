@@ -278,11 +278,13 @@ export default async function PerformancePage({
                     real={totals.lucroBrutoReal}
                     prev={totals.lucroBrutoPrev}
                     format={fmtMoney}
+                    className={PROFIT_COL_CLASS}
                   />
                   <FootCell
                     real={totals.margemBrutaReal}
                     prev={totals.margemBrutaPrev}
                     format={fmtPct2}
+                    className={PROFIT_COL_CLASS}
                   />
                   <td className="pt-3 text-right tabular-nums">
                     <div className="font-semibold text-fg-primary">
