@@ -1,7 +1,6 @@
 import {
   BarChart3,
   Target,
-  Route,
   Wallet,
   Megaphone,
   TrendingUp,
@@ -15,7 +14,7 @@ import { SyncIndicator } from "./sync-indicator";
 export function Sidebar() {
   return (
     <aside className="sticky top-0 flex h-screen flex-col gap-2 border-r border-border-default bg-surface-sidebar px-3 py-6">
-      <nav className="flex flex-col gap-1">
+      <nav className="my-auto flex flex-col gap-1">
         <NavItem
           href="/visao-geral"
           label="Visão Geral"
@@ -25,11 +24,6 @@ export function Sidebar() {
           href="/metas"
           label="Metas"
           icon={<Target strokeWidth={1.75} />}
-        />
-        <NavItem
-          href="/jornada"
-          label="Jornada"
-          icon={<Route strokeWidth={1.75} />}
         />
         <NavItem
           href="/custos"
@@ -52,7 +46,7 @@ export function Sidebar() {
           icon={<Activity strokeWidth={1.75} />}
         />
       </nav>
-      <div className="mt-auto flex flex-col gap-3">
+      <div className="flex flex-col gap-3">
         <NavItemCompact
           href="/integracoes"
           label="Integrações"
