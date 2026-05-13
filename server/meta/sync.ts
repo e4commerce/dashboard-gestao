@@ -4,6 +4,7 @@ import { adsInsights, metaAdAccounts } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
 import { fetchAccountDailyInsights } from "./insights";
 import { listMyAdAccounts } from "./client";
+import { toIsoDateSP } from "@/lib/datetime";
 
 export type MetaSyncResult = {
   accountsProcessed: number;
@@ -16,10 +17,6 @@ export type DiscoverResult = {
   discovered: number;
   newlyAdded: number;
 };
-
-function toIsoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
 
 // Lê /me/adaccounts e faz upsert na tabela meta_ad_accounts.
 // Preserva o campo `enabled` em rows existentes — só atualiza metadata.
@@ -110,8 +107,8 @@ export async function syncMetaInsights(
     };
   }
 
-  const since = toIsoDate(dateFrom);
-  const until = toIsoDate(new Date(dateTo.getTime() - 1));
+  const since = toIsoDateSP(dateFrom);
+  const until = toIsoDateSP(new Date(dateTo.getTime() - 1));
   const now = new Date();
   const errors: Array<{ accountId: string; message: string }> = [];
   let daysImported = 0;

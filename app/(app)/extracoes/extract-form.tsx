@@ -4,15 +4,27 @@ import { useActionState } from "react";
 import { extractAction, type ExtractActionState } from "./actions";
 
 const initialState: ExtractActionState = { status: "idle" };
+const SP_TZ = "America/Sao_Paulo";
 
-function todayUTC(): string {
-  return new Date().toISOString().slice(0, 10);
+// "YYYY-MM-DD" para um Date no fuso SP (independente do fuso do navegador).
+function isoDateSP(d: Date): string {
+  // en-CA já é YYYY-MM-DD; basta fixar o fuso.
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: SP_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
 }
 
-function daysAgoUTC(days: number): string {
+function todaySP(): string {
+  return isoDateSP(new Date());
+}
+
+function daysAgoSP(days: number): string {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() - days);
-  return d.toISOString().slice(0, 10);
+  return isoDateSP(d);
 }
 
 export function ExtractForm() {
@@ -37,7 +49,7 @@ export function ExtractForm() {
           <input
             type="date"
             name="dateFrom"
-            defaultValue={daysAgoUTC(7)}
+            defaultValue={daysAgoSP(7)}
             required
             className="rounded-md border border-border-default bg-surface-input px-3 py-2 text-sm text-fg-primary outline-none focus:border-action-primary"
           />
@@ -48,7 +60,7 @@ export function ExtractForm() {
           <input
             type="date"
             name="dateTo"
-            defaultValue={todayUTC()}
+            defaultValue={todaySP()}
             required
             className="rounded-md border border-border-default bg-surface-input px-3 py-2 text-sm text-fg-primary outline-none focus:border-action-primary"
           />

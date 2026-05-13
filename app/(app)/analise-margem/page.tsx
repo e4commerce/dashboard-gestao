@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/layout/page-header";
 import { MonthPicker } from "@/components/month-picker";
+import { ExportCsvButton } from "./export-csv-button";
 import {
   getMarginAnalysis,
   REVENUE_TAX_RATE,
@@ -76,7 +77,10 @@ export default async function AnaliseMargemPage({
           title="Análise de Margem"
           subtitle={`Lucro performance (vendas reais) e operacional (com custos de troca, voucher, reenvio e zerados)`}
         />
-        <MonthPicker month={month} />
+        <div className="flex items-center gap-3">
+          <MonthPicker month={month} />
+          <ExportCsvButton month={month} daily={daily} totals={totals} />
+        </div>
       </div>
 
       {/* ── Cards resumo ── */}
@@ -142,8 +146,8 @@ export default async function AnaliseMargemPage({
             Lucro diário
           </h3>
           <p className="text-xs text-fg-muted">
-            Lucro considera apenas pedidos com COGS sincronizado · Performance =
-            sem custos de pedidos inválidos · Operacional = com custos de troca,
+            Lucro = Faturamento − Custo produto − Mídia − Taxas − Custo op. ·
+            Performance ignora pedidos inválidos · Operacional inclui troca,
             voucher, reenvio e zerados
           </p>
         </div>

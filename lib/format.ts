@@ -30,6 +30,10 @@ export function formatDelta(delta: number): string {
   return `${formatted}%`;
 }
 
+// Datas exibidas são sempre formatadas no fuso de São Paulo, para refletir o
+// calendário local do usuário independente do navegador/servidor.
+const SP_TZ = "America/Sao_Paulo";
+
 export function formatDateLabel(iso: string): string {
   const months = [
     "Jan",
@@ -46,15 +50,43 @@ export function formatDateLabel(iso: string): string {
     "Dez",
   ];
   const d = new Date(iso);
-  return `${d.getUTCDate()} ${months[d.getUTCMonth()]}`;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: SP_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+  const get = (t: string) => parseInt(parts.find((p) => p.type === t)!.value);
+  return `${get("day")} ${months[get("month") - 1]}`;
 }
 
 export function formatLongDate(date: Date): string {
   return date
     .toLocaleDateString("pt-BR", {
+      timeZone: SP_TZ,
       weekday: "long",
       day: "numeric",
       month: "long",
     })
     .replace(/^./, (c) => c.toUpperCase());
+}
+
+// "DD/MM/YY HH:MM" no fuso SP — para timestamps de logs/sincronizações.
+export function formatDateTimeSP(d: Date | string | null): string {
+  if (!d) return "—";
+  const date = typeof d === "string" ? new Date(d) : d;
+  return date.toLocaleString("pt-BR", {
+    timeZone: SP_TZ,
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+// "DD/MM/YYYY" no fuso SP — para datas sem hora.
+export function formatDateBR(d: Date | string): string {
+  const date = typeof d === "string" ? new Date(d) : d;
+  return date.toLocaleDateString("pt-BR", { timeZone: SP_TZ });
 }

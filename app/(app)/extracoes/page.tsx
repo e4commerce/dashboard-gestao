@@ -2,21 +2,10 @@ import { PageHeader } from "@/components/layout/page-header";
 import { getRecentExtractionLogs } from "@/server/etl/extract";
 import { AutoRefreshOnSync } from "@/components/auto-refresh-on-sync";
 import { ExtractForm } from "./extract-form";
-
-function fmtDate(d: Date | string | null): string {
-  if (!d) return "—";
-  const date = typeof d === "string" ? new Date(d) : d;
-  return date.toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+import { formatDateTimeSP, formatDateBR } from "@/lib/format";
 
 function fmtRange(from: Date, to: Date): string {
-  return `${from.toLocaleDateString("pt-BR")} → ${to.toLocaleDateString("pt-BR")}`;
+  return `${formatDateBR(from)} → ${formatDateBR(to)}`;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -69,7 +58,7 @@ export default async function ExtracoesPage() {
                   className="border-b border-border-subtle last:border-0"
                 >
                   <td className="px-4 py-3 text-fg-secondary">
-                    {fmtDate(log.startedAt)}
+                    {formatDateTimeSP(log.startedAt)}
                   </td>
                   <td className="px-4 py-3 text-fg-secondary">
                     {fmtRange(log.dateFrom, log.dateTo)}

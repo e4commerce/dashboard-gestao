@@ -8,6 +8,7 @@ import {
 } from "@/server/db/schema";
 import { and, eq, gte, lt, sql } from "drizzle-orm";
 import { fetchDsersOrders, type DsersOrder } from "@/server/dsers/client";
+import { toIsoDateSP } from "@/lib/datetime";
 
 export type CogsSyncResult = {
   // Quantos pedidos a API do DSers retornou no período
@@ -45,7 +46,7 @@ async function fetchDsersChunked(
     chunks.push({
       startUnix: Math.floor(cursor / 1000),
       endUnix: Math.floor((dayEnd - 1000) / 1000),
-      label: new Date(cursor).toISOString().slice(0, 10),
+      label: toIsoDateSP(new Date(cursor)),
     });
     cursor = dayEnd;
   }

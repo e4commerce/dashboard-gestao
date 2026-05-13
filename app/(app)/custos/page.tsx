@@ -18,7 +18,7 @@ import {
   startOfMonthFromKey,
   endOfMonthFromKey,
 } from "@/lib/datetime";
-import { formatBRL, formatPercent } from "@/lib/format";
+import { formatBRL, formatDateTimeSP, formatPercent } from "@/lib/format";
 
 type StatCardProps = {
   label: string;
@@ -122,18 +122,6 @@ const SYNC_STATUS_STYLES: Record<string, string> = {
   failed: "text-status-error",
 };
 
-function fmtDateTime(d: Date | string | null): string {
-  if (!d) return "—";
-  const date = typeof d === "string" ? new Date(d) : d;
-  return date.toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 function CogsSyncHistory({
   logs,
 }: {
@@ -200,7 +188,7 @@ function CogsSyncHistory({
                   <>
                     <tr key={log.id} className="align-top">
                       <td className="py-2.5 pr-4 text-fg-secondary">
-                        {fmtDateTime(log.startedAt)}
+                        {formatDateTimeSP(log.startedAt)}
                       </td>
                       <td
                         className={`py-2.5 pr-4 font-medium ${SYNC_STATUS_STYLES[log.status] ?? "text-fg-muted"}`}
