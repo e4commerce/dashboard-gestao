@@ -151,9 +151,8 @@ export default async function PerformancePage({
             Performance diária
           </h3>
           <p className="text-xs text-fg-muted">
-            Linha de cima = realizado · linha de baixo = previsto (meta).
-            Sessões, conversão e CPS dependem de dados de sessão ainda não
-            sincronizados.
+            Linha de cima = realizado · linha de baixo = previsto (meta). Sessões
+            via ShopifyQL — sincronizadas diariamente às 04h.
           </p>
         </div>
 

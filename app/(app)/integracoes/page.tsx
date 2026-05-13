@@ -5,6 +5,7 @@ import {
   Search,
   CreditCard,
   Package,
+  Users,
   ExternalLink,
   Clock,
 } from "lucide-react";
@@ -16,11 +17,15 @@ import {
   SyncCogsButton,
   SyncMpButton,
   SyncMetaButton,
+  SyncSessionsButton,
 } from "./sync-buttons";
 import { getRecentExtractionLogs } from "@/server/etl/extract";
 import { getRecentCogsSyncLogs } from "@/server/cogs/sync";
 import { getRecentMpSyncLogs } from "@/server/mercadopago/sync";
 import { getAdsSummary } from "@/server/queries/ads";
+import { db } from "@/server/db/client";
+import { dailySessions } from "@/server/db/schema";
+import { desc } from "drizzle-orm";
 import {
   parseMonthKey,
   toMonthKeySP,
@@ -168,12 +173,18 @@ export default async function IntegracoesPage({
   const from = startOfMonthFromKey(month);
   const to = endOfMonthFromKey(month);
 
-  const [extractionLogs, cogsLogs, mpLogs, adsSummary] = await Promise.all([
-    getRecentExtractionLogs(10),
-    getRecentCogsSyncLogs(10),
-    getRecentMpSyncLogs(10),
-    getAdsSummary(from, to),
-  ]);
+  const [extractionLogs, cogsLogs, mpLogs, adsSummary, recentSessions] =
+    await Promise.all([
+      getRecentExtractionLogs(10),
+      getRecentCogsSyncLogs(10),
+      getRecentMpSyncLogs(10),
+      getAdsSummary(from, to),
+      db
+        .select()
+        .from(dailySessions)
+        .orderBy(desc(dailySessions.date))
+        .limit(10),
+    ]);
 
   const lastExtraction =
     extractionLogs.find((l) => l.status === "completed") ?? extractionLogs[0];
@@ -292,6 +303,38 @@ export default async function IntegracoesPage({
           </code>{" "}
           no script e rode &quot;Preview&quot; manualmente.
         </p>
+      </section>
+
+      {/* ── Shopify Sessions ── */}
+      <section className="flex flex-col gap-5 rounded-lg border border-border-default bg-surface-card p-6">
+        <SectionHeader
+          icon={<Users strokeWidth={1.75} />}
+          title="Shopify · Sessões"
+          description="Sessões diárias via ShopifyQL Analytics API"
+          lastSync={recentSessions[0]?.syncedAt ?? null}
+          cron="Diário às 04h"
+        />
+        <SyncSessionsButton month={month} />
+        <p className="text-xs text-fg-muted">
+          Requer o scope{" "}
+          <code className="rounded bg-surface-input px-1 py-0.5 text-[10px] text-fg-primary">
+            read_analytics
+          </code>{" "}
+          no app Shopify. A sincronização manual processa o mês selecionado; o
+          cron diário cobre os últimos 35 dias.
+        </p>
+        <HistoryTable
+          columns={["Data", "Sessões", "Sincronizado em"]}
+          rows={recentSessions.map((r) => ({
+            id: r.id,
+            cells: [
+              r.date,
+              r.sessions.toLocaleString("pt-BR"),
+              formatDateTimeSP(r.syncedAt),
+            ],
+          }))}
+          emptyLabel="Nenhuma sessão sincronizada ainda."
+        />
       </section>
 
       {/* ── Mercado Pago ── */}

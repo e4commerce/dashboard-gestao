@@ -1,17 +1,54 @@
 "use client";
 
 import { useActionState } from "react";
-import { CreditCard, Download, RefreshCw } from "lucide-react";
+import { CreditCard, Download, RefreshCw, Users } from "lucide-react";
 import {
   syncCogsAction,
   syncMetaAction,
   syncMpAction,
+  syncSessionsAction,
   type SyncCogsState,
   type SyncMetaState,
   type SyncMpState,
+  type SyncSessionsState,
 } from "./actions";
 
 type Props = { month: string };
+
+const initialSessions: SyncSessionsState = { status: "idle" };
+
+export function SyncSessionsButton({ month }: Props) {
+  const [state, formAction, pending] = useActionState(
+    syncSessionsAction,
+    initialSessions,
+  );
+  return (
+    <form action={formAction} className="flex flex-col gap-1.5">
+      <input type="hidden" name="month" value={month} />
+      <button
+        type="submit"
+        disabled={pending}
+        className="flex items-center gap-2 rounded-md border border-border-default bg-surface-card px-3.5 py-2 text-sm font-medium text-fg-primary transition-colors hover:bg-surface-card-hover disabled:opacity-60"
+      >
+        <Users
+          className={`size-3.5 ${pending ? "animate-pulse" : ""}`}
+          strokeWidth={2.25}
+        />
+        {pending ? "Buscando sessões…" : "Sincronizar Sessões"}
+      </button>
+      {state.status === "ok" ? (
+        <span className="text-[11px] text-status-success">
+          ✓ {state.upserted} dia(s) atualizados
+        </span>
+      ) : null}
+      {state.status === "error" ? (
+        <span className="max-w-[280px] text-[11px] text-status-error">
+          {state.message}
+        </span>
+      ) : null}
+    </form>
+  );
+}
 
 const initialCogs: SyncCogsState = { status: "idle" };
 const initialMp: SyncMpState = { status: "idle" };

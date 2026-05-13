@@ -12,6 +12,7 @@ import {
   startOfMonthFromKey,
   endOfMonthFromKey,
 } from "@/lib/datetime";
+import { syncSessions } from "@/server/sessions/sync";
 
 const dateRangeSchema = z.object({
   dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -122,6 +123,38 @@ export async function syncMpAction(
     const { logId } = await startMpSyncBackground(from, to, "manual");
     revalidateAfterSync();
     return { status: "started", logId };
+  } catch (err) {
+    return {
+      status: "error",
+      message: err instanceof Error ? err.message : "Erro desconhecido.",
+    };
+  }
+}
+
+// ── Shopify Sessions (ShopifyQL) ─────────────────────────────────────────────
+
+export type SyncSessionsState = {
+  status: "idle" | "ok" | "error";
+  message?: string;
+  upserted?: number;
+};
+
+export async function syncSessionsAction(
+  _prev: SyncSessionsState,
+  formData: FormData,
+): Promise<SyncSessionsState> {
+  const session = await auth();
+  if (!session?.user) return { status: "error", message: "Não autenticado." };
+
+  const month = parseMonthKey(formData.get("month") as string | null);
+  if (!month) return { status: "error", message: "Mês inválido." };
+
+  try {
+    const from = startOfMonthFromKey(month);
+    const to = endOfMonthFromKey(month);
+    const result = await syncSessions(from, to);
+    revalidateAfterSync();
+    return { status: "ok", upserted: result.upserted };
   } catch (err) {
     return {
       status: "error",

@@ -7,6 +7,9 @@ import {
   getMonthlyGoal,
 } from "./planning";
 import { toMonthKeySP } from "@/lib/datetime";
+import { db } from "@/server/db/client";
+import { dailySessions } from "@/server/db/schema";
+import { and, gte, lte } from "drizzle-orm";
 
 export type DailyPerformancePoint = {
   date: string;
@@ -82,14 +85,35 @@ function safeDiv(a: number, b: number): number | null {
   return b > 0 ? a / b : null;
 }
 
+async function getSessionsByDate(
+  dateFrom: Date,
+  dateTo: Date,
+): Promise<Map<string, number>> {
+  const fromIso = dateFrom.toISOString().slice(0, 10);
+  const toIso = dateTo.toISOString().slice(0, 10);
+  const rows = await db
+    .select({ date: dailySessions.date, sessions: dailySessions.sessions })
+    .from(dailySessions)
+    .where(
+      and(
+        gte(dailySessions.date, fromIso),
+        lte(dailySessions.date, toIso),
+      ),
+    );
+  const map = new Map<string, number>();
+  for (const r of rows) map.set(r.date, r.sessions);
+  return map;
+}
+
 export async function getPerformanceAnalysis(
   dateFrom: Date,
   dateTo: Date,
 ): Promise<PerformanceAnalysis> {
-  const [margin, dailyMetrics, goalSharesByDate] = await Promise.all([
+  const [margin, dailyMetrics, goalSharesByDate, sessionsByDate] = await Promise.all([
     getMarginAnalysis(dateFrom, dateTo),
     getDailyMetrics(dateFrom, dateTo),
     dailyGoalSharesForRange(dateFrom, dateTo),
+    getSessionsByDate(dateFrom, dateTo),
   ]);
 
   const metricsByDate = new Map<string, number>();
@@ -114,6 +138,7 @@ export async function getPerformanceAnalysis(
 
   const daily: DailyPerformancePoint[] = margin.daily.map((p) => {
     const pedidosReal = metricsByDate.get(p.date) ?? 0;
+    const sessoesReal = sessionsByDate.get(p.date) ?? null;
     const faturamentoReal = p.faturamento;
     const marketingReal = p.adSpend;
     const lucroBrutoReal = p.performanceProfit;
@@ -121,6 +146,14 @@ export async function getPerformanceAnalysis(
     const roasReal = safeDiv(faturamentoReal, marketingReal);
     const ticketReal = safeDiv(faturamentoReal, pedidosReal);
     const cpaReal = safeDiv(marketingReal, pedidosReal);
+    const conversaoReal =
+      sessoesReal !== null && sessoesReal > 0
+        ? (pedidosReal / sessoesReal) * 100
+        : null;
+    const cpsReal =
+      sessoesReal !== null && sessoesReal > 0
+        ? safeDiv(marketingReal, sessoesReal)
+        : null;
 
     const share = goalSharesByDate.get(p.date) ?? null;
     const faturamentoPrev = share ? share.revenue : null;
@@ -130,13 +163,13 @@ export async function getPerformanceAnalysis(
 
     return {
       date: p.date,
-      sessoesReal: null,
+      sessoesReal,
       sessoesPrev: null,
       pedidosReal,
       pedidosPrev: null,
       faturamentoReal,
       faturamentoPrev,
-      conversaoReal: null,
+      conversaoReal,
       conversaoPrev: null,
       roasReal,
       roasPrev: null,
@@ -144,7 +177,7 @@ export async function getPerformanceAnalysis(
       ticketPrev: null,
       marketingReal,
       marketingPrev: null,
-      cpsReal: null,
+      cpsReal,
       cpsPrev: null,
       lucroBrutoReal,
       lucroBrutoPrev,
@@ -157,6 +190,8 @@ export async function getPerformanceAnalysis(
 
   // Totais somáveis: pedidos, faturamento, marketing, lucro, prev.
   let sumPedidosReal = 0;
+  let sumSessoesReal = 0;
+  let hasSessoes = false;
   let sumFaturamentoReal = 0;
   let sumMarketingReal = 0;
   let sumLucroReal = 0;
@@ -170,6 +205,10 @@ export async function getPerformanceAnalysis(
     sumFaturamentoReal += p.faturamentoReal;
     sumMarketingReal += p.marketingReal;
     sumLucroReal += p.lucroBrutoReal;
+    if (p.sessoesReal !== null) {
+      sumSessoesReal += p.sessoesReal;
+      hasSessoes = true;
+    }
     if (p.faturamentoPrev !== null) {
       sumFaturamentoPrev += p.faturamentoPrev;
       hasFatPrev = true;
@@ -180,14 +219,24 @@ export async function getPerformanceAnalysis(
     }
   }
 
+  const totalSessoes = hasSessoes ? sumSessoesReal : null;
+  const totalConversao =
+    totalSessoes !== null && totalSessoes > 0
+      ? (sumPedidosReal / totalSessoes) * 100
+      : null;
+  const totalCps =
+    totalSessoes !== null && totalSessoes > 0
+      ? safeDiv(sumMarketingReal, totalSessoes)
+      : null;
+
   const totals: PerformanceTotals = {
-    sessoesReal: null,
+    sessoesReal: totalSessoes,
     sessoesPrev: null,
     pedidosReal: sumPedidosReal,
     pedidosPrev: null,
     faturamentoReal: sumFaturamentoReal,
     faturamentoPrev: hasFatPrev ? sumFaturamentoPrev : null,
-    conversaoReal: null,
+    conversaoReal: totalConversao,
     conversaoPrev: null,
     roasReal: safeDiv(sumFaturamentoReal, sumMarketingReal),
     roasPrev: null,
@@ -195,7 +244,7 @@ export async function getPerformanceAnalysis(
     ticketPrev: null,
     marketingReal: sumMarketingReal,
     marketingPrev: null,
-    cpsReal: null,
+    cpsReal: totalCps,
     cpsPrev: null,
     lucroBrutoReal: sumLucroReal,
     lucroBrutoPrev: hasLucroPrev ? sumLucroPrev : null,

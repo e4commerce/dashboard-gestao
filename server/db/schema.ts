@@ -408,6 +408,24 @@ export const orderCogsHistory = pgTable(
   ],
 );
 
+// Sessões diárias obtidas via ShopifyQL Analytics API.
+// 1 linha por data. Upsert diário — o cron sync-sessions popula isso.
+export const dailySessions = pgTable(
+  "daily_sessions",
+  {
+    id: serial("id").primaryKey(),
+    date: date("date").notNull(),
+    sessions: integer("sessions").notNull().default(0),
+    syncedAt: timestamp("synced_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("daily_sessions_date_key").on(t.date),
+    index("daily_sessions_date_idx").on(t.date),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type OrderAttribution = typeof orderAttribution.$inferSelect;
@@ -424,3 +442,4 @@ export type MetaAdAccount = typeof metaAdAccounts.$inferSelect;
 export type ServiceToken = typeof serviceTokens.$inferSelect;
 export type DsersOrderRecord = typeof dsersOrders.$inferSelect;
 export type OrderCogsHistoryRecord = typeof orderCogsHistory.$inferSelect;
+export type DailySession = typeof dailySessions.$inferSelect;
