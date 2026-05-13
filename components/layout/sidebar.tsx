@@ -6,6 +6,7 @@ import {
   Wallet,
   Megaphone,
   TrendingUp,
+  Activity,
 } from "lucide-react";
 import { NavItem } from "./nav-item";
 import { SyncIndicator } from "./sync-indicator";
@@ -43,6 +44,11 @@ export function Sidebar() {
           href="/analise-margem"
           label="Análise de Margem"
           icon={<TrendingUp strokeWidth={1.75} />}
+        />
+        <NavItem
+          href="/performance"
+          label="Análise de Performance"
+          icon={<Activity strokeWidth={1.75} />}
         />
         <NavItem
           href="/extracoes"
