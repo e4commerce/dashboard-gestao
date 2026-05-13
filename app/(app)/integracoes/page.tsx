@@ -23,9 +23,12 @@ import { getRecentExtractionLogs } from "@/server/etl/extract";
 import { getRecentCogsSyncLogs } from "@/server/cogs/sync";
 import { getRecentMpSyncLogs } from "@/server/mercadopago/sync";
 import { getAdsSummary } from "@/server/queries/ads";
+import { getHourlySessions, type HourlySession } from "@/server/queries/sessions";
 import { db } from "@/server/db/client";
 import { dailySessions } from "@/server/db/schema";
 import { desc } from "drizzle-orm";
+import { DayPicker } from "@/components/day-picker";
+import { toIsoDateSP } from "@/lib/datetime";
 import {
   parseMonthKey,
   toMonthKeySP,
@@ -165,6 +168,72 @@ function HistoryTable({
 
 type DailySessionRow = { id: number; date: string; sessions: number; syncedAt: Date };
 
+function HourlySessionsCard({
+  day,
+  hourly,
+}: {
+  day: string;
+  hourly: HourlySession[];
+}) {
+  const totalSessions = hourly.reduce((s, h) => s + h.sessions, 0);
+  const totalPageViews = hourly.reduce((s, h) => s + h.pageViews, 0);
+  const peak = hourly.reduce((m, h) => Math.max(m, h.sessions), 0);
+  const peakHour = hourly.find((h) => h.sessions === peak && peak > 0);
+
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-border-default bg-surface-input p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-0.5">
+          <p className="text-xs font-medium text-fg-primary">
+            Detalhamento horário
+          </p>
+          <p className="text-[11px] text-fg-muted">
+            {totalSessions.toLocaleString("pt-BR")} sessões ·{" "}
+            {totalPageViews.toLocaleString("pt-BR")} page views
+            {peakHour
+              ? ` · pico ${String(peakHour.hour).padStart(2, "0")}h (${peak.toLocaleString("pt-BR")})`
+              : ""}
+          </p>
+        </div>
+        <DayPicker day={day} paramName="sessionsDay" />
+      </div>
+
+      <div className="overflow-hidden rounded border border-border-subtle bg-surface-card">
+        <div className="grid grid-cols-[44px_1fr_64px] gap-0 border-b border-border-subtle bg-surface-input px-2 py-1.5 text-[10px] font-medium uppercase tracking-wider text-fg-muted">
+          <span>Hora</span>
+          <span>Sessões</span>
+          <span className="text-right">Page views</span>
+        </div>
+        {hourly.map((h) => {
+          const pct = peak > 0 ? (h.sessions / peak) * 100 : 0;
+          return (
+            <div
+              key={h.hour}
+              className="grid grid-cols-[44px_1fr_64px] items-center border-b border-border-subtle/40 px-2 py-1 text-xs last:border-b-0"
+            >
+              <span className="font-medium tabular-nums text-fg-muted">
+                {String(h.hour).padStart(2, "0")}h
+              </span>
+              <div className="relative h-5">
+                <div
+                  className="absolute inset-y-0 left-0 rounded-sm bg-action-primary/25"
+                  style={{ width: `${pct}%` }}
+                />
+                <span className="absolute inset-y-0 left-2 flex items-center font-medium tabular-nums text-fg-primary">
+                  {h.sessions > 0 ? h.sessions.toLocaleString("pt-BR") : "—"}
+                </span>
+              </div>
+              <span className="text-right tabular-nums text-fg-muted">
+                {h.pageViews > 0 ? h.pageViews.toLocaleString("pt-BR") : "—"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function buildPixelCode(appUrl: string): string {
   const endpoint = `${appUrl.replace(/\/$/, "")}/api/track/session`;
   return `// Dashboard Gestão — Web Pixel (sessões)
@@ -196,9 +265,13 @@ analytics.subscribe('page_viewed', (event) => {
 function SessionsSection({
   recentSessions,
   appUrl,
+  sessionsDay,
+  hourly,
 }: {
   recentSessions: DailySessionRow[];
   appUrl: string;
+  sessionsDay: string;
+  hourly: HourlySession[];
 }) {
   const pixelCode = buildPixelCode(appUrl);
   const lastSync = recentSessions[0]?.syncedAt ?? null;
@@ -260,6 +333,8 @@ function SessionsSection({
         </p>
       </div>
 
+      <HourlySessionsCard day={sessionsDay} hourly={hourly} />
+
       <HistoryTable
         columns={["Data", "Sessões", "Último registro"]}
         rows={recentSessions.map((r) => ({
@@ -275,14 +350,20 @@ function SessionsSection({
 export default async function IntegracoesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; sessionsDay?: string }>;
 }) {
   const params = await searchParams;
   const month = parseMonthKey(params.month) ?? toMonthKeySP(new Date());
   const from = startOfMonthFromKey(month);
   const to = endOfMonthFromKey(month);
 
-  const [extractionLogs, cogsLogs, mpLogs, adsSummary, recentSessions] =
+  const sessionsDay =
+    typeof params.sessionsDay === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(params.sessionsDay)
+      ? params.sessionsDay
+      : toIsoDateSP(new Date());
+
+  const [extractionLogs, cogsLogs, mpLogs, adsSummary, recentSessions, hourly] =
     await Promise.all([
       getRecentExtractionLogs(10),
       getRecentCogsSyncLogs(10),
@@ -293,6 +374,7 @@ export default async function IntegracoesPage({
         .from(dailySessions)
         .orderBy(desc(dailySessions.date))
         .limit(10),
+      getHourlySessions(sessionsDay),
     ]);
 
   const lastExtraction =
@@ -418,6 +500,8 @@ export default async function IntegracoesPage({
       <SessionsSection
         recentSessions={recentSessions}
         appUrl={process.env.NEXTAUTH_URL ?? "https://dashboard-gestao-production.up.railway.app"}
+        sessionsDay={sessionsDay}
+        hourly={hourly}
       />
 
       {/* ── Mercado Pago ── */}
