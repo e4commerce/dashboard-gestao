@@ -5,7 +5,10 @@ import {
   getDailyMetrics,
   getKpiTotals,
 } from "@/server/queries/dashboard";
-import { formatBRL } from "./format";
+import { getMarginAnalysis } from "@/server/queries/margin";
+import { getPerformanceAnalysis } from "@/server/queries/performance";
+import { getDailyAdSpend } from "@/server/queries/ads";
+import { formatBRL, formatPercent } from "./format";
 import {
   toMonthKeySP,
   startOfMonthFromKey,
@@ -53,15 +56,7 @@ export async function getOverviewChart(
   const to = endOfMonthFromKey(month);
   const points = await getDailyAccumulatedRevenue(from, to);
   if (points.length === 0) {
-    return [
-      {
-        date: `${month}-01`,
-        realizado: 0,
-        meta: 0,
-        realizadoDia: 0,
-        metaDia: 0,
-      },
-    ];
+    return [{ date: `${month}-01`, realizado: 0, meta: 0, realizadoDia: 0, metaDia: 0 }];
   }
   return points;
 }
@@ -83,9 +78,13 @@ export async function getKpis(
 ): Promise<Kpi[]> {
   const from = startOfMonthFromKey(month);
   const to = endOfMonthFromKey(month);
-  const totals = await getKpiTotals(from, to);
 
-  const vsTarget =
+  const [totals, margin] = await Promise.all([
+    getKpiTotals(from, to),
+    getMarginAnalysis(from, to),
+  ]);
+
+  const vsRevenue =
     totals.faturamentoMeta && totals.faturamentoMeta > 0
       ? totals.faturamento / totals.faturamentoMeta
       : undefined;
@@ -93,21 +92,19 @@ export async function getKpis(
   return [
     {
       label: "Lucro Operacional",
-      value: null,
+      value: margin.totals.operationalProfit,
       format: "BRL",
-      placeholder: "Disponível na Fase 3",
     },
     {
-      label: "Faturamento Atual",
+      label: "Faturamento",
       value: totals.faturamento,
       format: "BRL",
-      vsTarget,
+      vsTarget: vsRevenue,
     },
     {
       label: "Margem Operacional",
-      value: null,
+      value: margin.totals.operationalMargin,
       format: "PERCENT",
-      placeholder: "Disponível na Fase 3",
     },
   ];
 }
@@ -117,55 +114,110 @@ export async function getSectors(
 ): Promise<Sector[]> {
   const from = startOfMonthFromKey(month);
   const to = endOfMonthFromKey(month);
-  const [totals, history] = await Promise.all([
-    getKpiTotals(from, to),
+
+  const [history, perf, adDaily, margin] = await Promise.all([
     getDailyMetrics(from, to),
+    getPerformanceAnalysis(from, to),
+    getDailyAdSpend(from, to),
+    getMarginAnalysis(from, to),
   ]);
+
+  const pt = perf.totals;
+  const mt = margin.totals;
+
+  const totalMetaConversions = adDaily.reduce((s, d) => s + (d.meta.conversions ?? 0), 0);
+
+  const fmtRatio = (v: number) =>
+    v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return [
     {
       id: "marketing",
       title: "Marketing",
       metrics: [
-        { label: "CPA", value: null },
-        { label: "ROAS", value: null },
-        { label: "Investimento", value: null },
-        { label: "Conversões", value: null },
+        {
+          label: "Investimento",
+          value: pt.marketingReal > 0 ? formatBRL(pt.marketingReal) : null,
+          chartData: adDaily.map((d) => ({ date: d.date, value: d.total.spend })),
+          chartType: "area",
+          chartFormat: "BRL",
+        },
+        {
+          label: "ROAS",
+          value: pt.roasReal !== null ? fmtRatio(pt.roasReal) : null,
+        },
+        {
+          label: "CPA",
+          value: pt.cpaReal !== null ? formatBRL(pt.cpaReal, 2) : null,
+        },
+        {
+          label: "Conv. Meta",
+          value: totalMetaConversions > 0
+            ? totalMetaConversions.toLocaleString("pt-BR")
+            : null,
+        },
       ],
     },
     {
       id: "operacoes",
       title: "Operações",
       metrics: [
-        { label: "Custo Operacional", value: null },
         {
           label: "Pedidos",
-          value: totals.pedidos.toLocaleString("pt-BR"),
+          value: pt.pedidosReal.toLocaleString("pt-BR"),
           chartData: history.map((p) => ({ date: p.date, value: p.pedidos })),
           chartType: "bar",
           chartFormat: "number",
         },
         {
           label: "Ticket Médio",
-          value: totals.ticketMedio > 0 ? formatBRL(totals.ticketMedio) : "—",
-          chartData: history.map((p) => ({
-            date: p.date,
-            value: p.ticketMedio,
-          })),
+          value: pt.ticketReal !== null ? formatBRL(pt.ticketReal, 2) : null,
+          chartData: history.map((p) => ({ date: p.date, value: p.ticketMedio })),
           chartType: "area",
           chartFormat: "BRL",
         },
-        { label: "Margem", value: null },
+        {
+          label: "Custo de Produto",
+          value:
+            mt.cogsValid + mt.cogsValidEstimated > 0
+              ? formatBRL(mt.cogsValid + mt.cogsValidEstimated)
+              : null,
+        },
+        {
+          label: "Margem Bruta",
+          value:
+            pt.margemBrutaReal !== 0
+              ? formatPercent(pt.margemBrutaReal, 1)
+              : null,
+        },
       ],
     },
     {
       id: "cro",
       title: "CRO",
       metrics: [
-        { label: "Taxa de Conversão", value: null },
-        { label: "Sessões", value: null },
-        { label: "Bounce Rate", value: null },
-        { label: "Tempo Médio", value: null },
+        {
+          label: "Sessões",
+          value:
+            pt.sessoesReal !== null
+              ? pt.sessoesReal.toLocaleString("pt-BR")
+              : null,
+        },
+        {
+          label: "Taxa de Conversão",
+          value:
+            pt.conversaoReal !== null
+              ? formatPercent(pt.conversaoReal, 2)
+              : null,
+        },
+        {
+          label: "CPS",
+          value: pt.cpsReal !== null ? formatBRL(pt.cpsReal, 2) : null,
+        },
+        {
+          label: "Bounce Rate",
+          value: null,
+        },
       ],
     },
   ];
