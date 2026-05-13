@@ -13,11 +13,11 @@ import { PageHeader } from "@/components/layout/page-header";
 import { MonthPicker } from "@/components/month-picker";
 import { AutoRefreshOnSync } from "@/components/auto-refresh-on-sync";
 import { ExtractForm } from "./extract-form";
+import { CopyButton } from "./copy-button";
 import {
   SyncCogsButton,
   SyncMpButton,
   SyncMetaButton,
-  SyncSessionsButton,
 } from "./sync-buttons";
 import { getRecentExtractionLogs } from "@/server/etl/extract";
 import { getRecentCogsSyncLogs } from "@/server/cogs/sync";
@@ -163,6 +163,123 @@ function HistoryTable({
   );
 }
 
+type DailySessionRow = { id: number; date: string; sessions: number; syncedAt: Date };
+
+function buildPixelCode(appUrl: string): string {
+  const endpoint = `${appUrl.replace(/\/$/, "")}/api/track/session`;
+  return `// Dashboard Gestão — Web Pixel (sessões)
+// Instale em: Shopify Admin → Settings → Customer events → Add custom pixel
+
+const ENDPOINT = '${endpoint}';
+const TIMEOUT_MS = 30 * 60 * 1000; // nova sessão após 30 min de inatividade
+const KEY_TS   = '_mg_ts';
+const KEY_DATE = '_mg_date';
+
+analytics.subscribe('page_viewed', async () => {
+  try {
+    const now   = Date.now();
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo'
+    }).format(new Date(now));
+
+    const rawTs   = await browser.localStorage.getItem(KEY_TS);
+    const rawDate = await browser.localStorage.getItem(KEY_DATE);
+    const lastTs  = rawTs ? parseInt(rawTs, 10) : 0;
+
+    const isNew = !lastTs || (now - lastTs) > TIMEOUT_MS || rawDate !== today;
+
+    await browser.localStorage.setItem(KEY_TS, String(now));
+    if (!isNew) return;
+
+    await browser.localStorage.setItem(KEY_DATE, today);
+
+    fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      body: JSON.stringify({ date: today }),
+    });
+  } catch (_) {}
+});`;
+}
+
+function SessionsSection({
+  recentSessions,
+  appUrl,
+}: {
+  recentSessions: DailySessionRow[];
+  appUrl: string;
+}) {
+  const pixelCode = buildPixelCode(appUrl);
+  const lastSync = recentSessions[0]?.syncedAt ?? null;
+
+  return (
+    <section className="flex flex-col gap-5 rounded-lg border border-border-default bg-surface-card p-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="flex size-10 items-center justify-center rounded-md bg-surface-input text-fg-primary [&_svg]:size-5">
+            <Users strokeWidth={1.75} />
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <h3 className="text-sm font-semibold text-fg-primary">
+              Shopify · Sessões
+            </h3>
+            <p className="text-xs text-fg-muted">
+              Contagem diária via Custom Web Pixel
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-0.5 text-right">
+          <span className="text-[11px] text-fg-muted">
+            Último registro: {lastSync ? relativeFromNow(lastSync) : "nunca"}
+          </span>
+          <span className="flex items-center gap-1 text-[11px] text-fg-muted">
+            <Clock className="size-3" strokeWidth={2.25} />
+            Tempo real (por page view)
+          </span>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 rounded-md border border-border-default bg-surface-input p-4">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-medium text-fg-primary">
+            1. Vá em{" "}
+            <span className="font-semibold">
+              Shopify Admin → Settings → Customer events → Add custom pixel
+            </span>
+          </p>
+          <CopyButton text={pixelCode} />
+        </div>
+        <p className="text-xs text-fg-muted">
+          2. Cole o código abaixo, dê um nome (ex: &quot;Dashboard Sessões&quot;) e salve.
+        </p>
+        <pre className="mt-1 overflow-x-auto rounded border border-border-subtle bg-surface-card p-3 text-[10px] leading-relaxed text-fg-secondary">
+          {pixelCode}
+        </pre>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <p className="text-xs font-medium text-fg-primary">Como funciona</p>
+        <p className="text-xs text-fg-muted">
+          O pixel escuta cada <code className="rounded bg-surface-input px-1 py-0.5 text-[10px]">page_viewed</code> e
+          usa localStorage para detectar início de sessão (inatividade &gt; 30 min = nova sessão).
+          Ao iniciar uma sessão, faz POST para a nossa API que incrementa o contador do dia em São Paulo.
+          Não rastreia dados pessoais.
+        </p>
+      </div>
+
+      <HistoryTable
+        columns={["Data", "Sessões", "Último registro"]}
+        rows={recentSessions.map((r) => ({
+          id: r.id,
+          cells: [r.date, r.sessions.toLocaleString("pt-BR"), formatDateTimeSP(r.syncedAt)],
+        }))}
+        emptyLabel="Nenhuma sessão registrada ainda. Instale o pixel para começar."
+      />
+    </section>
+  );
+}
+
 export default async function IntegracoesPage({
   searchParams,
 }: {
@@ -305,37 +422,11 @@ export default async function IntegracoesPage({
         </p>
       </section>
 
-      {/* ── Shopify Sessions ── */}
-      <section className="flex flex-col gap-5 rounded-lg border border-border-default bg-surface-card p-6">
-        <SectionHeader
-          icon={<Users strokeWidth={1.75} />}
-          title="Shopify · Sessões"
-          description="Sessões diárias via ShopifyQL Analytics API"
-          lastSync={recentSessions[0]?.syncedAt ?? null}
-          cron="Diário às 04h"
-        />
-        <SyncSessionsButton month={month} />
-        <p className="text-xs text-fg-muted">
-          Requer o scope{" "}
-          <code className="rounded bg-surface-input px-1 py-0.5 text-[10px] text-fg-primary">
-            read_analytics
-          </code>{" "}
-          no app Shopify. A sincronização manual processa o mês selecionado; o
-          cron diário cobre os últimos 35 dias.
-        </p>
-        <HistoryTable
-          columns={["Data", "Sessões", "Sincronizado em"]}
-          rows={recentSessions.map((r) => ({
-            id: r.id,
-            cells: [
-              r.date,
-              r.sessions.toLocaleString("pt-BR"),
-              formatDateTimeSP(r.syncedAt),
-            ],
-          }))}
-          emptyLabel="Nenhuma sessão sincronizada ainda."
-        />
-      </section>
+      {/* ── Shopify Sessions (Web Pixel) ── */}
+      <SessionsSection
+        recentSessions={recentSessions}
+        appUrl={process.env.NEXTAUTH_URL ?? "https://dashboard-gestao-production.up.railway.app"}
+      />
 
       {/* ── Mercado Pago ── */}
       <section className="flex flex-col gap-5 rounded-lg border border-border-default bg-surface-card p-6">

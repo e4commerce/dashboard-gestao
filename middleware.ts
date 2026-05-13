@@ -7,6 +7,7 @@ const PUBLIC_PREFIXES = [
   "/api/auth",
   "/api/cron",
   "/api/debug",
+  "/api/track",
   "/api/webhooks",
   "/_next",
   "/favicon.ico",
