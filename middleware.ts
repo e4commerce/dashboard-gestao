@@ -39,6 +39,15 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  if (
+    pathname.startsWith("/metas") &&
+    session.user.email !== "thiago@muranojoias.com.br"
+  ) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/visao-geral";
+    return NextResponse.redirect(url);
+  }
+
   return NextResponse.next();
 }
 

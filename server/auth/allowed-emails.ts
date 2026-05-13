@@ -1,3 +1,5 @@
+export const METAS_ADMIN = "thiago@muranojoias.com.br";
+
 export const ALLOWED_EMAILS = new Set([
   "thiago@muranojoias.com.br",
   "vinicius@muranojoias.com.br",

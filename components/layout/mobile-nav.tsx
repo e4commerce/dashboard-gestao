@@ -11,20 +11,21 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-const ITEMS = [
+const BASE_ITEMS = [
   { href: "/visao-geral", label: "Geral", icon: BarChart3 },
-  { href: "/metas", label: "Metas", icon: Target },
+  { href: "/metas", label: "Metas", icon: Target, metasOnly: true },
   { href: "/analise-margem", label: "Margem", icon: TrendingUp },
   { href: "/performance", label: "Perf.", icon: Activity },
   { href: "/dados", label: "Dados", icon: Database },
 ];
 
-export function MobileNav() {
+export function MobileNav({ canAccessMetas }: { canAccessMetas: boolean }) {
   const pathname = usePathname();
+  const items = BASE_ITEMS.filter((i) => !i.metasOnly || canAccessMetas);
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 flex border-t border-border-default bg-surface-sidebar md:hidden">
-      {ITEMS.map(({ href, label, icon: Icon }) => {
+      {items.map(({ href, label, icon: Icon }) => {
         const isActive = pathname === href || pathname.startsWith(`${href}/`);
         return (
           <Link
