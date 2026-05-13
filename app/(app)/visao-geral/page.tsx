@@ -1,8 +1,8 @@
+import Image from "next/image";
 import { RevenueChart } from "@/components/dashboard/revenue-chart";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { SectorCard } from "@/components/dashboard/sector-card";
 import { MonthPicker } from "@/components/month-picker";
-import { PageHeader } from "@/components/layout/page-header";
 import { AutoRefreshInterval } from "@/components/auto-refresh-interval";
 import { getOverviewChart, getOverviewProfitChart, getKpis, getSectors } from "@/lib/mock-data";
 import { parseMonthKey, toMonthKeySP } from "@/lib/datetime";
@@ -28,7 +28,17 @@ export default async function VisaoGeralPage({
     <div className="mx-auto flex max-w-[1400px] flex-col gap-8">
       <AutoRefreshInterval intervalMs={10 * 60 * 1000} />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <PageHeader title="Visão Geral" subtitle={today} />
+        <header className="flex flex-col gap-1">
+          <span className="text-sm text-fg-muted">{today}</span>
+          <Image
+            src="/tipografia-branco@4x.png"
+            alt="Murano"
+            width={3169}
+            height={782}
+            priority
+            className="h-auto w-auto max-h-10"
+          />
+        </header>
         <MonthPicker month={month} />
       </div>
 
