@@ -114,8 +114,12 @@ export default async function AnaliseMargemPage({
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <StatCard
           label="Custo de produto"
-          value={formatBRL(totals.cogsValid)}
-          sub={`Cobertura ${formatPercent(totals.cogsCoveragePct, 0)}`}
+          value={formatBRL(totals.cogsValid + totals.cogsValidEstimated)}
+          sub={
+            totals.cogsValidEstimated > 0
+              ? `Real ${formatBRL(totals.cogsValid)} + estimado ${formatBRL(totals.cogsValidEstimated)}`
+              : `Cobertura ${formatPercent(totals.cogsCoveragePct, 0)}`
+          }
         />
         <StatCard
           label="Mídia paga"
@@ -147,8 +151,9 @@ export default async function AnaliseMargemPage({
           </h3>
           <p className="text-xs text-fg-muted">
             Lucro = Faturamento − Custo produto − Mídia − Taxas − Custo op. ·
-            Performance ignora pedidos inválidos · Operacional inclui troca,
-            voucher, reenvio e zerados
+            Pedidos sem COGS sincronizado e cobertura abaixo de 96% recebem
+            estimativa via taxa média dos últimos 7 dias (marcado com{" "}
+            <span className="text-status-warning">~</span>)
           </p>
         </div>
 
@@ -222,8 +227,47 @@ export default async function AnaliseMargemPage({
                     >
                       {hasRevenue ? formatPercent(p.cogsCoveragePct, 0) : "—"}
                     </td>
-                    <td className="py-2 pr-3 text-right tabular-nums text-fg-secondary">
-                      {p.cogsValid > 0 ? formatBRL(p.cogsValid) : "—"}
+                    <td className="group relative py-2 pr-3 text-right tabular-nums text-fg-secondary">
+                      {(() => {
+                        const cogsTotal = p.cogsValid + p.cogsValidEstimated;
+                        if (cogsTotal === 0) return "—";
+                        if (p.cogsValidEstimated > 0) {
+                          return (
+                            <span className="cursor-help underline decoration-dotted decoration-status-warning/70 underline-offset-2">
+                              {formatBRL(cogsTotal)}
+                              <span className="ml-0.5 text-status-warning">
+                                ~
+                              </span>
+                            </span>
+                          );
+                        }
+                        return formatBRL(cogsTotal);
+                      })()}
+                      {p.cogsValidEstimated > 0 ? (
+                        <div className="pointer-events-none invisible absolute right-0 top-full z-20 mt-1 w-56 rounded-md border border-border-default bg-surface-card p-3 text-left shadow-lg group-hover:visible">
+                          <div className="mb-1 flex justify-between gap-3 text-[11px]">
+                            <span className="text-fg-muted">Real (DSers)</span>
+                            <span className="font-medium tabular-nums text-fg-primary">
+                              {formatBRL(p.cogsValid)}
+                            </span>
+                          </div>
+                          <div className="mb-1 flex justify-between gap-3 text-[11px]">
+                            <span className="text-fg-muted">Estimado</span>
+                            <span className="font-medium tabular-nums text-status-warning">
+                              {formatBRL(p.cogsValidEstimated)}
+                            </span>
+                          </div>
+                          <div className="mb-1 border-t border-border-subtle pt-1.5 text-[10px] text-fg-muted">
+                            {p.cogsRateUsed !== null
+                              ? `Taxa média 7 dias: ${formatPercent(p.cogsRateUsed * 100, 1)}`
+                              : "Sem janela de referência"}
+                          </div>
+                          <div className="text-[10px] text-fg-muted">
+                            Aplicado nos {(100 - p.cogsCoveragePct).toFixed(0)}%
+                            de pedidos sem COGS sincronizado.
+                          </div>
+                        </div>
+                      ) : null}
                     </td>
                     <td className="group relative py-2 pr-3 text-right tabular-nums text-fg-secondary">
                       {p.adSpend > 0 ? (
@@ -376,8 +420,39 @@ export default async function AnaliseMargemPage({
                       ? formatPercent(totals.cogsCoveragePct, 0)
                       : "—"}
                   </td>
-                  <td className="pt-3 pr-3 text-right tabular-nums text-fg-primary">
-                    {formatBRL(totals.cogsValid)}
+                  <td className="group relative pt-3 pr-3 text-right tabular-nums text-fg-primary">
+                    {totals.cogsValidEstimated > 0 ? (
+                      <>
+                        <span className="cursor-help underline decoration-dotted decoration-status-warning/70 underline-offset-2">
+                          {formatBRL(
+                            totals.cogsValid + totals.cogsValidEstimated,
+                          )}
+                          <span className="ml-0.5 text-status-warning">~</span>
+                        </span>
+                        <div className="pointer-events-none invisible absolute right-0 bottom-full z-20 mb-1 w-56 rounded-md border border-border-default bg-surface-card p-3 text-left font-normal shadow-lg group-hover:visible">
+                          <div className="mb-1 flex justify-between gap-3 text-[11px]">
+                            <span className="text-fg-muted">Real (DSers)</span>
+                            <span className="font-medium tabular-nums text-fg-primary">
+                              {formatBRL(totals.cogsValid)}
+                            </span>
+                          </div>
+                          <div className="mb-1 flex justify-between gap-3 text-[11px]">
+                            <span className="text-fg-muted">Estimado</span>
+                            <span className="font-medium tabular-nums text-status-warning">
+                              {formatBRL(totals.cogsValidEstimated)}
+                            </span>
+                          </div>
+                          {totals.cogsRateUsed !== null ? (
+                            <div className="border-t border-border-subtle pt-1.5 text-[10px] text-fg-muted">
+                              Taxa média:{" "}
+                              {formatPercent(totals.cogsRateUsed * 100, 1)}
+                            </div>
+                          ) : null}
+                        </div>
+                      </>
+                    ) : (
+                      formatBRL(totals.cogsValid)
+                    )}
                   </td>
                   <td className="group relative pt-3 pr-3 text-right tabular-nums text-fg-primary">
                     <span className="cursor-help underline decoration-dotted decoration-fg-muted underline-offset-2">
