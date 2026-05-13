@@ -408,8 +408,9 @@ export const orderCogsHistory = pgTable(
   ],
 );
 
-// Sessões diárias obtidas via ShopifyQL Analytics API.
-// 1 linha por data. Upsert diário — o cron sync-sessions popula isso.
+// Sessões diárias contadas pelo Custom Web Pixel da Shopify.
+// Mantém um contador denormalizado por dia — populado pelo endpoint
+// /api/track/session quando um sessionId novo (cookie _shopify_s) chega.
 export const dailySessions = pgTable(
   "daily_sessions",
   {
@@ -424,6 +425,21 @@ export const dailySessions = pgTable(
     uniqueIndex("daily_sessions_date_key").on(t.date),
     index("daily_sessions_date_idx").on(t.date),
   ],
+);
+
+// Set de sessionIds (_shopify_s) já contabilizados — garante dedup
+// exato com a definição de sessão da Shopify (30 min inatividade).
+// É append-only; uma sessão = uma linha.
+export const trackedSessions = pgTable(
+  "tracked_sessions",
+  {
+    sessionId: varchar("session_id", { length: 128 }).primaryKey(),
+    date: date("date").notNull(),
+    trackedAt: timestamp("tracked_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("tracked_sessions_date_idx").on(t.date)],
 );
 
 export type User = typeof users.$inferSelect;
@@ -443,3 +459,4 @@ export type ServiceToken = typeof serviceTokens.$inferSelect;
 export type DsersOrderRecord = typeof dsersOrders.$inferSelect;
 export type OrderCogsHistoryRecord = typeof orderCogsHistory.$inferSelect;
 export type DailySession = typeof dailySessions.$inferSelect;
+export type TrackedSession = typeof trackedSessions.$inferSelect;

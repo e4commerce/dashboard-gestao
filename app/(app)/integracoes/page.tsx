@@ -169,35 +169,30 @@ function buildPixelCode(appUrl: string): string {
   const endpoint = `${appUrl.replace(/\/$/, "")}/api/track/session`;
   return `// Dashboard Gestão — Web Pixel (sessões)
 // Instale em: Shopify Admin → Settings → Customer events → Add custom pixel
+// Usa o cookie _shopify_s (mesma sessão que a Shopify usa nos relatórios)
 
 const ENDPOINT = '${endpoint}';
-const TIMEOUT_MS = 30 * 60 * 1000; // nova sessão após 30 min de inatividade
-const KEY_TS   = '_mg_ts';
-const KEY_DATE = '_mg_date';
+const KEY_LAST_SID = '_mg_last_sid';
 
 analytics.subscribe('page_viewed', async () => {
   try {
-    const now   = Date.now();
+    const sid = await browser.cookie.get('_shopify_s');
+    if (!sid) return;
+
+    const lastSent = await browser.localStorage.getItem(KEY_LAST_SID);
+    if (lastSent === sid) return;
+
     const today = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'America/Sao_Paulo'
-    }).format(new Date(now));
+    }).format(new Date());
 
-    const rawTs   = await browser.localStorage.getItem(KEY_TS);
-    const rawDate = await browser.localStorage.getItem(KEY_DATE);
-    const lastTs  = rawTs ? parseInt(rawTs, 10) : 0;
-
-    const isNew = !lastTs || (now - lastTs) > TIMEOUT_MS || rawDate !== today;
-
-    await browser.localStorage.setItem(KEY_TS, String(now));
-    if (!isNew) return;
-
-    await browser.localStorage.setItem(KEY_DATE, today);
+    await browser.localStorage.setItem(KEY_LAST_SID, sid);
 
     fetch(ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       keepalive: true,
-      body: JSON.stringify({ date: today }),
+      body: JSON.stringify({ sessionId: sid, date: today }),
     });
   } catch (_) {}
 });`;
@@ -261,10 +256,11 @@ function SessionsSection({
       <div className="flex flex-col gap-1">
         <p className="text-xs font-medium text-fg-primary">Como funciona</p>
         <p className="text-xs text-fg-muted">
-          O pixel escuta cada <code className="rounded bg-surface-input px-1 py-0.5 text-[10px]">page_viewed</code> e
-          usa localStorage para detectar início de sessão (inatividade &gt; 30 min = nova sessão).
-          Ao iniciar uma sessão, faz POST para a nossa API que incrementa o contador do dia em São Paulo.
-          Não rastreia dados pessoais.
+          O pixel lê o cookie <code className="rounded bg-surface-input px-1 py-0.5 text-[10px]">_shopify_s</code>{" "}
+          — o mesmo identificador de sessão que a Shopify usa nos relatórios oficiais
+          (rotaciona após 30 min de inatividade). Cada sessionId novo é contado uma única vez,
+          com dedup adicional no servidor. Resultado deve bater com Analytics → Sessions do
+          Shopify Admin (margem ≤ 5%, fora bots filtrados pela Shopify).
         </p>
       </div>
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/server/db/client";
-import { dailySessions } from "@/server/db/schema";
+import { dailySessions, trackedSessions } from "@/server/db/schema";
 import { sql } from "drizzle-orm";
 
 export const runtime = "nodejs";
@@ -17,31 +17,43 @@ export async function OPTIONS() {
 }
 
 export async function POST(req: Request) {
-  let body: unknown;
+  let body: { sessionId?: unknown; date?: unknown };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "bad request" }, { status: 400, headers: CORS });
   }
 
+  const sessionId = typeof body.sessionId === "string" ? body.sessionId.trim() : "";
   const date =
-    typeof (body as Record<string, unknown>)?.date === "string" &&
-    /^\d{4}-\d{2}-\d{2}$/.test((body as Record<string, unknown>).date as string)
-      ? ((body as Record<string, unknown>).date as string)
+    typeof body.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.date)
+      ? body.date
       : null;
 
-  if (!date) {
-    return NextResponse.json({ error: "invalid date" }, { status: 400, headers: CORS });
+  if (!sessionId || sessionId.length > 128 || !date) {
+    return NextResponse.json({ error: "invalid payload" }, { status: 400, headers: CORS });
   }
 
-  // Rejeita datas futuras (proteção básica contra abuso)
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(
-    new Date(),
-  );
-  if (date > today) {
-    return NextResponse.json({ ok: false }, { headers: CORS });
+  const todayInSp = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+  }).format(new Date());
+  if (date > todayInSp) {
+    return NextResponse.json({ ok: false, reason: "future date" }, { headers: CORS });
   }
 
+  // Tenta inserir o sessionId — se já existir, este é um page_viewed
+  // adicional da mesma sessão e não conta como nova.
+  const inserted = await db
+    .insert(trackedSessions)
+    .values({ sessionId, date })
+    .onConflictDoNothing()
+    .returning({ sessionId: trackedSessions.sessionId });
+
+  if (inserted.length === 0) {
+    return NextResponse.json({ ok: true, counted: false }, { headers: CORS });
+  }
+
+  // Sessão nova → incrementa o contador do dia.
   await db
     .insert(dailySessions)
     .values({ date, sessions: 1, syncedAt: new Date() })
@@ -53,5 +65,5 @@ export async function POST(req: Request) {
       },
     });
 
-  return NextResponse.json({ ok: true }, { headers: CORS });
+  return NextResponse.json({ ok: true, counted: true }, { headers: CORS });
 }
