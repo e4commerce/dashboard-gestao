@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { z } from "zod";
+import { authConfig } from "./auth.config";
 import { ALLOWED_EMAILS, getNameForEmail } from "@/server/auth/allowed-emails";
 import { verifyOtp } from "@/server/auth/otp";
 
@@ -10,8 +11,7 @@ const credentialsSchema = z.object({
 });
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 365 }, // 1 year
-  pages: { signIn: "/login" },
+  ...authConfig,
   providers: [
     Credentials({
       credentials: {
@@ -37,20 +37,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-  callbacks: {
-    jwt({ token, user }) {
-      if (user) {
-        token.role = (user as { role?: string }).role ?? "admin";
-      }
-      return token;
-    },
-    session({ session, token }) {
-      if (session.user) {
-        session.user.role = (token.role as string) ?? "admin";
-      }
-      return session;
-    },
-  },
 });
 
 declare module "next-auth" {

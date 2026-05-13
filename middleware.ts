@@ -1,6 +1,10 @@
+import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { auth } from "@/auth";
+import { authConfig } from "./auth.config";
+
+// Use the edge-compatible auth (no Node.js-only modules).
+const { auth } = NextAuth(authConfig);
 
 const PUBLIC_PATHS = ["/login"];
 const PUBLIC_PREFIXES = [
@@ -14,8 +18,6 @@ const PUBLIC_PREFIXES = [
   "/favicon.ico",
 ];
 
-// Qualquer request a um arquivo estático em /public (png, jpg, svg, etc)
-// — identificado pela extensão no path.
 const STATIC_FILE = /\.(?:png|jpe?g|gif|svg|webp|ico|avif|bmp|css|js|map|woff2?|ttf|otf|eot|txt|json|xml|pdf)$/i;
 
 export async function middleware(req: NextRequest) {

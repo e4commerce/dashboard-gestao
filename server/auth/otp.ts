@@ -5,9 +5,15 @@ import { Resend } from "resend";
 import { db } from "@/server/db/client";
 import { emailOtps } from "@/server/db/schema";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = "Murano Dashboard <no-reply@interno.muranojoias.com.br>";
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+// Lazy so the constructor doesn't run at build time when the env var is absent.
+let _resend: Resend | null = null;
+function getResend(): Resend {
+  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY!);
+  return _resend;
+}
 
 function generateCode(): string {
   return crypto.randomInt(100_000, 1_000_000).toString();
@@ -20,7 +26,7 @@ export async function createAndSendOtp(email: string): Promise<void> {
 
   await db.insert(emailOtps).values({ email, codeHash, expiresAt });
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM,
     to: email,
     subject: "Seu código de acesso — Murano Dashboard",
