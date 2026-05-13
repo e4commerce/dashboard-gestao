@@ -1,10 +1,9 @@
 import {
   BarChart3,
   Target,
-  Wallet,
-  Megaphone,
   TrendingUp,
   Activity,
+  Database,
   Plug,
 } from "lucide-react";
 import { NavItem } from "./nav-item";
@@ -26,16 +25,6 @@ export function Sidebar() {
           icon={<Target strokeWidth={1.75} />}
         />
         <NavItem
-          href="/custos"
-          label="Custos"
-          icon={<Wallet strokeWidth={1.75} />}
-        />
-        <NavItem
-          href="/marketing"
-          label="Marketing"
-          icon={<Megaphone strokeWidth={1.75} />}
-        />
-        <NavItem
           href="/analise-margem"
           label="Análise de Margem"
           icon={<TrendingUp strokeWidth={1.75} />}
@@ -44,6 +33,11 @@ export function Sidebar() {
           href="/performance"
           label="Análise de Performance"
           icon={<Activity strokeWidth={1.75} />}
+        />
+        <NavItem
+          href="/dados"
+          label="Dados"
+          icon={<Database strokeWidth={1.75} />}
         />
       </nav>
       <div className="flex flex-col gap-3">
