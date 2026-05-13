@@ -3,6 +3,7 @@ import { KpiCard } from "@/components/dashboard/kpi-card";
 import { SectorCard } from "@/components/dashboard/sector-card";
 import { MonthPicker } from "@/components/month-picker";
 import { PageHeader } from "@/components/layout/page-header";
+import { AutoRefreshInterval } from "@/components/auto-refresh-interval";
 import { getOverviewChart, getOverviewProfitChart, getKpis, getSectors } from "@/lib/mock-data";
 import { parseMonthKey, toMonthKeySP } from "@/lib/datetime";
 import { formatLongDate } from "@/lib/format";
@@ -25,6 +26,7 @@ export default async function VisaoGeralPage({
 
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-8">
+      <AutoRefreshInterval intervalMs={10 * 60 * 1000} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <PageHeader title="Visão Geral" subtitle={today} />
         <MonthPicker month={month} />
