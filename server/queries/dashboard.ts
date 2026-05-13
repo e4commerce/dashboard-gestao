@@ -16,6 +16,7 @@ import {
   getDailyWeights,
   getMonthlyGoal,
 } from "./planning";
+import { getMarginAnalysis } from "./margin";
 
 export type DailyPoint = {
   date: string;
@@ -194,6 +195,59 @@ export async function getKpiTotals(
     faturamentoMeta,
     grossProfitGoal,
   };
+}
+
+export async function getDailyAccumulatedProfit(
+  dateFrom: Date,
+  dateTo: Date,
+): Promise<DailyPoint[]> {
+  const { daily: marginDaily } = await getMarginAnalysis(dateFrom, dateTo);
+
+  const monthDistributions = new Map<
+    string,
+    { revenueGoal: number; grossProfitGoal: number; dailyMetaShare: Map<number, number> }
+  >();
+  for (const d of daysBetween(dateFrom, dateTo)) {
+    const mk = monthKey(d);
+    if (!monthDistributions.has(mk)) {
+      monthDistributions.set(mk, await loadMonthDistribution(mk));
+    }
+  }
+
+  const profitByDate = new Map(marginDaily.map((p) => [p.date, p.operationalProfit]));
+  const todayKey = toIsoDateUTC(new Date());
+
+  let realizadoAcum = 0;
+  let metaAcum = 0;
+  const points: DailyPoint[] = [];
+
+  for (const d of daysBetween(dateFrom, dateTo)) {
+    const dayKey = toIsoDateUTC(d);
+    const mk = monthKey(d);
+    const dayOfMonth = d.getUTCDate();
+    const dist = monthDistributions.get(mk);
+
+    const dayRealizado = profitByDate.get(dayKey) ?? 0;
+    realizadoAcum += dayRealizado;
+
+    // Same weight distribution as revenue, scaled to grossProfitGoal
+    const revenueShare = dist?.dailyMetaShare.get(dayOfMonth) ?? 0;
+    const revenueGoal = dist?.revenueGoal ?? 0;
+    const grossProfitGoal = dist?.grossProfitGoal ?? 0;
+    const dayMeta = revenueGoal > 0 ? (revenueShare / revenueGoal) * grossProfitGoal : 0;
+    metaAcum += dayMeta;
+
+    const isFuture = dayKey > todayKey;
+    points.push({
+      date: dayKey,
+      realizado: isFuture ? null : realizadoAcum,
+      meta: metaAcum,
+      realizadoDia: isFuture ? null : dayRealizado,
+      metaDia: dayMeta,
+    });
+  }
+
+  return points;
 }
 
 export function daysInMonth(year: number, month0: number): number {

@@ -1,6 +1,7 @@
 import "server-only";
 import {
   getDailyAccumulatedRevenue,
+  getDailyAccumulatedProfit,
   getDailyMetrics,
   getKpiTotals,
 } from "@/server/queries/dashboard";
@@ -61,6 +62,18 @@ export async function getOverviewChart(
         metaDia: 0,
       },
     ];
+  }
+  return points;
+}
+
+export async function getOverviewProfitChart(
+  month = toMonthKeySP(new Date()),
+): Promise<ChartPoint[]> {
+  const from = startOfMonthFromKey(month);
+  const to = endOfMonthFromKey(month);
+  const points = await getDailyAccumulatedProfit(from, to);
+  if (points.length === 0) {
+    return [{ date: `${month}-01`, realizado: 0, meta: 0, realizadoDia: 0, metaDia: 0 }];
   }
   return points;
 }

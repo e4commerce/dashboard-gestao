@@ -3,7 +3,7 @@ import { KpiCard } from "@/components/dashboard/kpi-card";
 import { SectorCard } from "@/components/dashboard/sector-card";
 import { MonthPicker } from "@/components/month-picker";
 import { PageHeader } from "@/components/layout/page-header";
-import { getOverviewChart, getKpis, getSectors } from "@/lib/mock-data";
+import { getOverviewChart, getOverviewProfitChart, getKpis, getSectors } from "@/lib/mock-data";
 import { parseMonthKey, toMonthKeySP } from "@/lib/datetime";
 import { formatLongDate } from "@/lib/format";
 
@@ -15,8 +15,9 @@ export default async function VisaoGeralPage({
   const params = await searchParams;
   const month = parseMonthKey(params.month) ?? toMonthKeySP(new Date());
 
-  const [chart, kpis, sectors] = await Promise.all([
+  const [chart, profitChart, kpis, sectors] = await Promise.all([
     getOverviewChart(month),
+    getOverviewProfitChart(month),
     getKpis(month),
     getSectors(month),
   ]);
@@ -29,7 +30,7 @@ export default async function VisaoGeralPage({
         <MonthPicker month={month} />
       </div>
 
-      <RevenueChart data={chart} />
+      <RevenueChart revenueData={chart} profitData={profitChart} />
 
       <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
         {kpis.map((kpi) => (
