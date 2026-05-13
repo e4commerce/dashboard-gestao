@@ -6,9 +6,7 @@ import { extractAction, type ExtractActionState } from "./actions";
 const initialState: ExtractActionState = { status: "idle" };
 const SP_TZ = "America/Sao_Paulo";
 
-// "YYYY-MM-DD" para um Date no fuso SP (independente do fuso do navegador).
 function isoDateSP(d: Date): string {
-  // en-CA já é YYYY-MM-DD; basta fixar o fuso.
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: SP_TZ,
     year: "numeric",
@@ -28,21 +26,13 @@ function daysAgoSP(days: number): string {
 }
 
 export function ExtractForm() {
-  const [state, formAction, pending] = useActionState(extractAction, initialState);
+  const [state, formAction, pending] = useActionState(
+    extractAction,
+    initialState,
+  );
 
   return (
-    <form
-      action={formAction}
-      className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-6"
-    >
-      <div className="flex flex-col gap-1">
-        <span className="text-sm font-semibold text-fg-primary">Extrair Agora</span>
-        <span className="text-xs text-fg-muted">
-          Importa pedidos do Shopify no intervalo selecionado.
-          {" "}A extração roda em background — pode sair da página sem interromper.
-        </span>
-      </div>
-
+    <form action={formAction} className="flex flex-col gap-3">
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-fg-secondary">De</span>
@@ -71,14 +61,14 @@ export function ExtractForm() {
           disabled={pending}
           className="rounded-md bg-action-primary px-4 py-2 text-sm font-medium text-fg-on-dark transition-colors hover:bg-action-primary-hover disabled:opacity-60"
         >
-          {pending ? "Iniciando…" : "Extrair"}
+          {pending ? "Iniciando…" : "Extrair pedidos"}
         </button>
       </div>
 
       {state.status === "started" ? (
         <div className="rounded-md bg-status-info/10 px-3 py-2 text-xs text-status-info">
-          ✓ Extração #{state.logId} iniciada. Acompanhe o status na tabela abaixo —
-          ela atualiza automaticamente.
+          ✓ Extração #{state.logId} iniciada em background. A tabela atualiza
+          sozinha quando concluir.
         </div>
       ) : null}
 

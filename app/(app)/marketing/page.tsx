@@ -1,9 +1,5 @@
-import Link from "next/link";
-import { Settings } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { MonthPicker } from "@/components/month-picker";
-import { RefreshDataButton } from "./refresh-button";
-import { SyncMetaButton } from "./sync-meta-button";
 import { getDailyAdSpend, getAdsSummary } from "@/server/queries/ads";
 import {
   parseMonthKey,
@@ -73,19 +69,7 @@ export default async function MarketingPage({
           title="Marketing"
           subtitle={`Google: ${fmtLastSync(summary.lastSyncByPlatform.google)} · Meta: ${fmtLastSync(summary.lastSyncByPlatform.meta)}`}
         />
-        <div className="flex items-center gap-3">
-          <MonthPicker month={month} />
-          <Link
-            href="/marketing/contas"
-            title="Configurar quais contas Meta sincronizar"
-            className="flex items-center gap-2 rounded-md border border-border-default bg-surface-card px-3 py-2 text-xs font-medium text-fg-secondary transition-colors hover:bg-surface-card-hover hover:text-fg-primary"
-          >
-            <Settings className="size-3.5" strokeWidth={2.25} />
-            Contas Meta
-          </Link>
-          <SyncMetaButton month={month} />
-          <RefreshDataButton />
-        </div>
+        <MonthPicker month={month} />
       </div>
 
       {!hasGoogle && !hasMeta ? <ScriptSetupCard /> : null}

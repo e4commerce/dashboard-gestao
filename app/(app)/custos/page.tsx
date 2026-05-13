@@ -2,15 +2,12 @@ import { PageHeader } from "@/components/layout/page-header";
 import { MonthPicker } from "@/components/month-picker";
 import { CostsDailyTable } from "@/components/dashboard/costs-daily-table";
 import { AutoRefreshOnSync } from "@/components/auto-refresh-on-sync";
-import { SyncCogsButton } from "./sync-button";
-import { SyncMpButton } from "./sync-mp-button";
 import {
   getCostsOverview,
   getDailyCosts,
   getInvalidReasonBreakdown,
   type CostGroupSummary,
 } from "@/server/queries/costs";
-import { getRecentCogsSyncLogs } from "@/server/cogs/sync";
 import { getMpSummary } from "@/server/queries/gateway-fees";
 import {
   parseMonthKey,
@@ -18,7 +15,7 @@ import {
   startOfMonthFromKey,
   endOfMonthFromKey,
 } from "@/lib/datetime";
-import { formatBRL, formatDateTimeSP, formatPercent } from "@/lib/format";
+import { formatBRL, formatPercent } from "@/lib/format";
 
 type StatCardProps = {
   label: string;
@@ -116,119 +113,6 @@ function Field({
   );
 }
 
-const SYNC_STATUS_STYLES: Record<string, string> = {
-  completed: "text-status-success",
-  running: "text-status-info",
-  failed: "text-status-error",
-};
-
-function CogsSyncHistory({
-  logs,
-}: {
-  logs: Array<{
-    id: number;
-    status: string;
-    startedAt: Date | string;
-    completedAt: Date | string | null;
-    dateFrom: Date | string;
-    dateTo: Date | string;
-    matched: number;
-    cleared: number;
-    totalDsersOrders: number | null;
-    ourOrdersInRange: number | null;
-    unmatchedSample: string | null;
-    executionTimeMs: number | null;
-    errorMessage: string | null;
-  }>;
-}) {
-  return (
-    <section className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-6">
-      <div>
-        <h3 className="text-sm font-semibold text-fg-primary">
-          Histórico de sincronizações
-        </h3>
-        <p className="text-xs text-fg-muted">
-          Últimas execuções do sync com o DSers — atualiza automaticamente
-        </p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-border-subtle text-left">
-              <th className="pb-2 pr-4 font-medium text-fg-muted">Iniciado</th>
-              <th className="pb-2 pr-4 font-medium text-fg-muted">Status</th>
-              <th className="pb-2 pr-4 text-right font-medium text-fg-muted">
-                DSers / Nossos
-              </th>
-              <th className="pb-2 pr-4 text-right font-medium text-fg-muted">
-                Confirmados
-              </th>
-              <th className="pb-2 pr-4 text-right font-medium text-fg-muted">
-                Limpos
-              </th>
-              <th className="pb-2 text-right font-medium text-fg-muted">
-                Duração
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border-subtle">
-            {logs.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="py-6 text-center text-fg-muted">
-                  Nenhuma sincronização registrada ainda.
-                </td>
-              </tr>
-            ) : (
-              logs.map((log) => {
-                const sample: string[] = log.unmatchedSample
-                  ? (() => { try { return JSON.parse(log.unmatchedSample) as string[]; } catch { return []; } })()
-                  : [];
-                const nameMismatch = log.matched === 0 && (log.totalDsersOrders ?? 0) > 0;
-                return (
-                  <>
-                    <tr key={log.id} className="align-top">
-                      <td className="py-2.5 pr-4 text-fg-secondary">
-                        {formatDateTimeSP(log.startedAt)}
-                      </td>
-                      <td
-                        className={`py-2.5 pr-4 font-medium ${SYNC_STATUS_STYLES[log.status] ?? "text-fg-muted"}`}
-                      >
-                        {log.status}
-                      </td>
-                      <td className="py-2.5 pr-4 text-right tabular-nums text-fg-secondary">
-                        {log.totalDsersOrders ?? "—"} / {log.ourOrdersInRange ?? "—"}
-                      </td>
-                      <td className="py-2.5 pr-4 text-right tabular-nums text-status-success">
-                        {log.matched}
-                      </td>
-                      <td className="py-2.5 pr-4 text-right tabular-nums text-fg-muted">
-                        {log.cleared}
-                      </td>
-                      <td className="py-2.5 text-right tabular-nums text-fg-secondary">
-                        {log.executionTimeMs
-                          ? `${(log.executionTimeMs / 1000).toFixed(1)}s`
-                          : "—"}
-                      </td>
-                    </tr>
-                    {nameMismatch && sample.length > 0 ? (
-                      <tr key={`${log.id}-warn`}>
-                        <td colSpan={6} className="pb-2.5 text-[11px] text-status-warning">
-                          ⚠ DSers retornou pedidos mas nenhum casou com o Shopify. Amostra de nomes do DSers:{" "}
-                          <span className="font-mono">{sample.slice(0, 5).join(", ")}</span>
-                        </td>
-                      </tr>
-                    ) : null}
-                  </>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
 function fmtLastSync(d: Date | null): string {
   if (!d) return "Nunca sincronizado";
   const diff = Date.now() - d.getTime();
@@ -251,11 +135,10 @@ export default async function CustosPage({
   const from = startOfMonthFromKey(month);
   const to = endOfMonthFromKey(month);
 
-  const [overview, daily, invalidBreakdown, syncLogs, mp] = await Promise.all([
+  const [overview, daily, invalidBreakdown, mp] = await Promise.all([
     getCostsOverview(from, to),
     getDailyCosts(from, to),
     getInvalidReasonBreakdown(from, to),
-    getRecentCogsSyncLogs(10),
     getMpSummary(from, to),
   ]);
 
@@ -274,11 +157,7 @@ export default async function CustosPage({
           title="Custos de Produto"
           subtitle={`Última sincronização: ${fmtLastSync(overview.lastSyncAt)}`}
         />
-        <div className="flex items-center gap-3">
-          <MonthPicker month={month} />
-          <SyncMpButton month={month} />
-          <SyncCogsButton month={month} />
-        </div>
+        <MonthPicker month={month} />
       </div>
 
       {/* ── Resumo geral ── */}
@@ -343,9 +222,6 @@ export default async function CustosPage({
 
       {/* ── Tabela diária ── */}
       <CostsDailyTable data={daily} />
-
-      {/* ── Histórico de sincronizações ── */}
-      <CogsSyncHistory logs={syncLogs} />
 
       {/* ── Breakdown dos inválidos por motivo ── */}
       <section className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-6">

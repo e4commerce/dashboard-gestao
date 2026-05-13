@@ -1,14 +1,15 @@
 import {
   BarChart3,
   Target,
-  Database,
   Route,
   Wallet,
   Megaphone,
   TrendingUp,
   Activity,
+  Plug,
 } from "lucide-react";
 import { NavItem } from "./nav-item";
+import { NavItemCompact } from "./nav-item-compact";
 import { SyncIndicator } from "./sync-indicator";
 
 export function Sidebar() {
@@ -50,13 +51,13 @@ export function Sidebar() {
           label="Análise de Performance"
           icon={<Activity strokeWidth={1.75} />}
         />
-        <NavItem
-          href="/extracoes"
-          label="Extrações"
-          icon={<Database strokeWidth={1.75} />}
-        />
       </nav>
-      <div className="mt-auto">
+      <div className="mt-auto flex flex-col gap-3">
+        <NavItemCompact
+          href="/integracoes"
+          label="Integrações"
+          icon={<Plug strokeWidth={1.75} />}
+        />
         <SyncIndicator />
       </div>
     </aside>
