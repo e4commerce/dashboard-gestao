@@ -1,5 +1,6 @@
+import Image from "next/image";
+import Link from "next/link";
 import {
-  BarChart3,
   Target,
   TrendingUp,
   Activity,
@@ -13,12 +14,21 @@ import { SyncIndicator } from "./sync-indicator";
 export function Sidebar() {
   return (
     <aside className="sticky top-0 flex h-screen flex-col gap-2 border-r border-border-default bg-surface-sidebar px-3 py-6">
-      <nav className="my-auto flex flex-col gap-1">
-        <NavItem
-          href="/visao-geral"
-          label="Visão Geral"
-          icon={<BarChart3 strokeWidth={1.75} />}
+      <Link
+        href="/visao-geral"
+        aria-label="Visão geral"
+        className="flex items-center justify-center px-1 py-2 transition-opacity hover:opacity-80"
+      >
+        <Image
+          src="/tipografia-branco@4x.png"
+          alt="Murano"
+          width={3169}
+          height={782}
+          priority
+          className="h-auto w-full max-w-[72px]"
         />
+      </Link>
+      <nav className="my-auto flex flex-col gap-1">
         <NavItem
           href="/metas"
           label="Metas"
