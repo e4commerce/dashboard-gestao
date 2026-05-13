@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/layout/page-header";
 import { MonthPicker } from "@/components/month-picker";
+import { ExportCsvButton } from "./export-csv-button";
 import { getPerformanceAnalysis } from "@/server/queries/performance";
 import {
   parseMonthKey,
@@ -99,7 +100,10 @@ export default async function PerformancePage({
           title="Análise de Performance"
           subtitle="Acompanhamento diário · Realizado em destaque · Previsto em cinza"
         />
-        <MonthPicker month={month} />
+        <div className="flex items-center gap-3">
+          <MonthPicker month={month} />
+          <ExportCsvButton month={month} daily={daily} totals={totals} />
+        </div>
       </div>
 
       {/* ── Resumo do mês ── */}
