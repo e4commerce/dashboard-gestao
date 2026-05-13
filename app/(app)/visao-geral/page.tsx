@@ -6,7 +6,6 @@ import { MonthPicker } from "@/components/month-picker";
 import { AutoRefreshInterval } from "@/components/auto-refresh-interval";
 import { getOverviewChart, getOverviewProfitChart, getKpis, getSectors } from "@/lib/mock-data";
 import { parseMonthKey, toMonthKeySP } from "@/lib/datetime";
-import { formatLongDate } from "@/lib/format";
 
 export default async function VisaoGeralPage({
   searchParams,
@@ -22,23 +21,19 @@ export default async function VisaoGeralPage({
     getKpis(month),
     getSectors(month),
   ]);
-  const today = formatLongDate(new Date());
 
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-8">
       <AutoRefreshInterval intervalMs={10 * 60 * 1000} />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <header className="flex flex-col gap-1">
-          <span className="text-sm text-fg-muted">{today}</span>
-          <Image
-            src="/tipografia-branco-4x.png"
-            alt="Murano"
-            width={3169}
-            height={782}
-            priority
-            className="h-10 w-auto"
-          />
-        </header>
+        <Image
+          src="/tipografia-branco-4x.png"
+          alt="Murano"
+          width={3169}
+          height={782}
+          priority
+          className="h-10 w-auto"
+        />
         <MonthPicker month={month} />
       </div>
 
