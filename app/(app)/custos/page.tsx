@@ -5,6 +5,8 @@ import { AutoRefreshOnSync } from "@/components/auto-refresh-on-sync";
 import {
   getCostsOverview,
   getDailyCosts,
+  getInfluencerCouponBreakdown,
+  getInfluencerCouponSummary,
   getInvalidReasonBreakdown,
   type CostGroupSummary,
 } from "@/server/queries/costs";
@@ -135,12 +137,15 @@ export default async function CustosPage({
   const from = startOfMonthFromKey(month);
   const to = endOfMonthFromKey(month);
 
-  const [overview, daily, invalidBreakdown, mp] = await Promise.all([
-    getCostsOverview(from, to),
-    getDailyCosts(from, to),
-    getInvalidReasonBreakdown(from, to),
-    getMpSummary(from, to),
-  ]);
+  const [overview, daily, invalidBreakdown, mp, influencer, influencerByCode] =
+    await Promise.all([
+      getCostsOverview(from, to),
+      getDailyCosts(from, to),
+      getInvalidReasonBreakdown(from, to),
+      getMpSummary(from, to),
+      getInfluencerCouponSummary(from, to),
+      getInfluencerCouponBreakdown(from, to),
+    ]);
 
   const totalCogs = overview.valid.totalCogs + overview.invalid.totalCogs;
   const totalOrders = overview.valid.totalOrders + overview.invalid.totalOrders;
@@ -222,6 +227,203 @@ export default async function CustosPage({
 
       {/* ── Tabela diária ── */}
       <CostsDailyTable data={daily} />
+
+      {/* ── Cupons de influencer (20% OFF) ── */}
+      <section className="flex flex-col gap-5 rounded-lg border border-border-default bg-surface-card p-4 md:p-6">
+        <div>
+          <h3 className="text-sm font-semibold text-fg-primary">
+            Lucratividade — Cupons de influencer (20% OFF)
+          </h3>
+          <p className="text-xs text-fg-muted">
+            Pedidos válidos com cupom terminado em &quot;20&quot;. Receita já líquida do
+            desconto aplicado; não inclui comissão paga ao influencer.
+          </p>
+        </div>
+
+        {influencer.totalOrders === 0 ? (
+          <p className="text-xs text-fg-muted">
+            Nenhum pedido com cupom de influencer encontrado no período.
+          </p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              <StatCard
+                label="Pedidos"
+                value={influencer.totalOrders.toLocaleString("pt-BR")}
+                sub={`${influencer.coveragePct.toFixed(0)}% com COGS`}
+              />
+              <StatCard label="Receita" value={formatBRL(influencer.totalRevenue)} />
+              <StatCard
+                label="Custo de produto"
+                value={formatBRL(influencer.totalCogs)}
+                sub={
+                  influencer.revenueWithCogs > 0
+                    ? `${formatPercent(influencer.costPct, 1)} da receita`
+                    : "—"
+                }
+                accent="negative"
+              />
+              <StatCard
+                label="Lucro bruto"
+                value={formatBRL(influencer.grossProfit)}
+                sub={
+                  influencer.revenueWithCogs > 0
+                    ? `${formatPercent(influencer.grossMargin, 1)} margem`
+                    : "—"
+                }
+                accent={
+                  influencer.grossProfit <= 0
+                    ? "negative"
+                    : influencer.grossMargin >= 40
+                      ? "positive"
+                      : "neutral"
+                }
+              />
+              <StatCard
+                label="Ticket médio"
+                value={
+                  influencer.totalOrders > 0
+                    ? formatBRL(influencer.totalRevenue / influencer.totalOrders)
+                    : "—"
+                }
+              />
+              <StatCard
+                label="vs. válidos sem cupom"
+                value={
+                  overview.valid.costPct > 0 && influencer.revenueWithCogs > 0
+                    ? `${(influencer.costPct - overview.valid.costPct).toFixed(1)}pp`
+                    : "—"
+                }
+                sub="diferença em % de custo"
+                accent={
+                  influencer.revenueWithCogs > 0 && overview.valid.costPct > 0
+                    ? influencer.costPct > overview.valid.costPct
+                      ? "negative"
+                      : "positive"
+                    : "neutral"
+                }
+              />
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border-subtle text-left">
+                    <th className="pb-2 pr-4 font-medium text-fg-muted">Cupom</th>
+                    <th className="pb-2 pr-4 text-right font-medium text-fg-muted">
+                      Pedidos
+                    </th>
+                    <th className="pb-2 pr-4 text-right font-medium text-fg-muted">
+                      Cobertura
+                    </th>
+                    <th className="pb-2 pr-4 text-right font-medium text-fg-muted">
+                      Receita
+                    </th>
+                    <th className="pb-2 pr-4 text-right font-medium text-fg-muted">
+                      COGS
+                    </th>
+                    <th className="pb-2 pr-4 text-right font-medium text-fg-muted">
+                      Lucro bruto
+                    </th>
+                    <th className="pb-2 pr-4 text-right font-medium text-fg-muted">
+                      Margem
+                    </th>
+                    <th className="pb-2 text-right font-medium text-fg-muted">
+                      Ticket médio
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-subtle">
+                  {influencerByCode.map((row) => {
+                    const marginColor =
+                      row.revenueWithCogs === 0
+                        ? "text-fg-muted"
+                        : row.grossMargin >= 40
+                          ? "text-status-success"
+                          : row.grossMargin >= 20
+                            ? "text-fg-primary"
+                            : "text-status-error";
+                    return (
+                      <tr key={row.code}>
+                        <td className="py-2.5 pr-4 font-medium text-fg-primary">
+                          {row.code}
+                        </td>
+                        <td className="py-2.5 pr-4 text-right tabular-nums text-fg-secondary">
+                          {row.orderCount.toLocaleString("pt-BR")}
+                        </td>
+                        <td className="py-2.5 pr-4 text-right tabular-nums text-fg-secondary">
+                          {row.coveragePct.toFixed(0)}%
+                        </td>
+                        <td className="py-2.5 pr-4 text-right tabular-nums font-medium text-fg-primary">
+                          {formatBRL(row.totalRevenue)}
+                        </td>
+                        <td className="py-2.5 pr-4 text-right tabular-nums text-status-error">
+                          {row.totalCogs > 0 ? formatBRL(row.totalCogs) : "—"}
+                        </td>
+                        <td
+                          className={`py-2.5 pr-4 text-right tabular-nums font-medium ${
+                            row.revenueWithCogs === 0
+                              ? "text-fg-muted"
+                              : row.grossProfit >= 0
+                                ? "text-status-success"
+                                : "text-status-error"
+                          }`}
+                        >
+                          {row.revenueWithCogs > 0 ? formatBRL(row.grossProfit) : "—"}
+                        </td>
+                        <td className={`py-2.5 pr-4 text-right tabular-nums font-medium ${marginColor}`}>
+                          {row.revenueWithCogs > 0
+                            ? formatPercent(row.grossMargin, 1)
+                            : "—"}
+                        </td>
+                        <td className="py-2.5 text-right tabular-nums text-fg-secondary">
+                          {formatBRL(row.avgTicket)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  <tr className="border-t border-border-default">
+                    <td className="py-2.5 pr-4 font-semibold text-fg-primary">
+                      Total
+                    </td>
+                    <td className="py-2.5 pr-4 text-right tabular-nums font-semibold text-fg-primary">
+                      {influencer.totalOrders.toLocaleString("pt-BR")}
+                    </td>
+                    <td className="py-2.5 pr-4 text-right tabular-nums font-semibold text-fg-primary">
+                      {influencer.coveragePct.toFixed(0)}%
+                    </td>
+                    <td className="py-2.5 pr-4 text-right tabular-nums font-semibold text-fg-primary">
+                      {formatBRL(influencer.totalRevenue)}
+                    </td>
+                    <td className="py-2.5 pr-4 text-right tabular-nums font-semibold text-status-error">
+                      {formatBRL(influencer.totalCogs)}
+                    </td>
+                    <td
+                      className={`py-2.5 pr-4 text-right tabular-nums font-semibold ${
+                        influencer.grossProfit >= 0
+                          ? "text-status-success"
+                          : "text-status-error"
+                      }`}
+                    >
+                      {formatBRL(influencer.grossProfit)}
+                    </td>
+                    <td className="py-2.5 pr-4 text-right tabular-nums font-semibold text-fg-primary">
+                      {influencer.revenueWithCogs > 0
+                        ? formatPercent(influencer.grossMargin, 1)
+                        : "—"}
+                    </td>
+                    <td className="py-2.5 text-right tabular-nums font-semibold text-fg-primary">
+                      {influencer.totalOrders > 0
+                        ? formatBRL(influencer.totalRevenue / influencer.totalOrders)
+                        : "—"}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </section>
 
       {/* ── Breakdown dos inválidos por motivo ── */}
       <section className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-4 md:p-6">

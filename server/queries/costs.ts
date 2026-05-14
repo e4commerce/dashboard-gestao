@@ -51,6 +51,20 @@ export type InvalidReasonBreakdown = {
   cogs: number;
 };
 
+export type InfluencerCouponRow = {
+  code: string;
+  orderCount: number;
+  ordersWithCogs: number;
+  coveragePct: number;
+  totalRevenue: number;
+  revenueWithCogs: number;
+  totalCogs: number;
+  grossProfit: number;
+  grossMargin: number;
+  costPct: number;
+  avgTicket: number;
+};
+
 export type DailyInvalidReasonRow = {
   date: string;
   reenvio: number;
@@ -317,6 +331,77 @@ export async function getInvalidReasonBreakdown(
       label: LABELS[key],
       orderCount: row?.orderCount ?? 0,
       cogs: row?.cogs ?? 0,
+    };
+  });
+}
+
+// ─── Pedidos com cupom de influencer (códigos terminados em "20" = 20% OFF) ──
+
+// Match any code inside the comma-separated `discount_codes` that ends with "20".
+// Examples: "ANA20", "MARIA20" → match. "200OFF", "FRETE2025", "PROMO20OFF" → no.
+const influencerCouponPredicate = sql`${orders.discountCodes} ~* '(^|,)[^,]*20($|,)'`;
+
+export async function getInfluencerCouponSummary(
+  dateFrom: Date,
+  dateTo: Date,
+): Promise<CostGroupSummary> {
+  return groupSummary(dateFrom, dateTo, and(validOrder, influencerCouponPredicate));
+}
+
+export async function getInfluencerCouponBreakdown(
+  dateFrom: Date,
+  dateTo: Date,
+): Promise<InfluencerCouponRow[]> {
+  // Unnest discount_codes and keep only entries ending with "20".
+  // Group by normalized (uppercase, trimmed) code so "ana20" and "ANA20" merge.
+  const rows = await db.execute<{
+    code: string;
+    order_count: number;
+    orders_with_cogs: number;
+    total_revenue: number;
+    revenue_with_cogs: number;
+    total_cogs: number;
+  }>(sql`
+    SELECT
+      UPPER(TRIM(c.code)) AS code,
+      COUNT(*)::int AS order_count,
+      COUNT(*) FILTER (WHERE o.cogs_amount > 0)::int AS orders_with_cogs,
+      COALESCE(SUM(o.total_price::numeric), 0)::float AS total_revenue,
+      COALESCE(SUM(o.total_price::numeric) FILTER (WHERE o.cogs_amount > 0), 0)::float AS revenue_with_cogs,
+      COALESCE(SUM(o.cogs_amount::numeric) FILTER (WHERE o.cogs_amount > 0), 0)::float AS total_cogs
+    FROM orders o
+    CROSS JOIN LATERAL unnest(string_to_array(o.discount_codes, ',')) AS c(code)
+    WHERE o.financial_status = 'PAID'
+      AND o.total_price::numeric > 0
+      AND (o.discount_codes IS NULL OR o.discount_codes NOT ILIKE '%TROCA%')
+      AND (o.discount_codes IS NULL OR o.discount_codes NOT ILIKE '%VOUCHER%')
+      AND (o.tags IS NULL OR o.tags NOT ILIKE '%Reenvio%')
+      AND o.created_at >= ${dateFrom}
+      AND o.created_at < ${dateTo}
+      AND TRIM(c.code) ~* '20$'
+    GROUP BY UPPER(TRIM(c.code))
+    ORDER BY total_revenue DESC
+  `);
+
+  return rows.map((r) => {
+    const orderCount = Number(r.order_count) || 0;
+    const ordersWithCogs = Number(r.orders_with_cogs) || 0;
+    const totalRevenue = Number(r.total_revenue) || 0;
+    const revenueWithCogs = Number(r.revenue_with_cogs) || 0;
+    const totalCogs = Number(r.total_cogs) || 0;
+    const grossProfit = revenueWithCogs - totalCogs;
+    return {
+      code: r.code,
+      orderCount,
+      ordersWithCogs,
+      coveragePct: orderCount > 0 ? (ordersWithCogs / orderCount) * 100 : 0,
+      totalRevenue,
+      revenueWithCogs,
+      totalCogs,
+      grossProfit,
+      grossMargin: revenueWithCogs > 0 ? (grossProfit / revenueWithCogs) * 100 : 0,
+      costPct: revenueWithCogs > 0 ? (totalCogs / revenueWithCogs) * 100 : 0,
+      avgTicket: orderCount > 0 ? totalRevenue / orderCount : 0,
     };
   });
 }
