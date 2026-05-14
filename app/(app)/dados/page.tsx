@@ -394,6 +394,9 @@ async function InfluencerTab({ from, to }: { from: Date; to: Date }) {
                       COGS
                     </th>
                     <th className="pb-2 pr-4 text-right font-medium text-fg-muted">
+                      %Custo
+                    </th>
+                    <th className="pb-2 pr-4 text-right font-medium text-fg-muted">
                       Lucro bruto
                     </th>
                     <th className="pb-2 pr-4 text-right font-medium text-fg-muted">
@@ -414,6 +417,14 @@ async function InfluencerTab({ from, to }: { from: Date; to: Date }) {
                           : row.grossMargin >= 20
                             ? "text-fg-primary"
                             : "text-status-error";
+                    const costPctColor =
+                      row.revenueWithCogs === 0
+                        ? "text-fg-muted"
+                        : row.costPct <= 40
+                          ? "text-status-success"
+                          : row.costPct <= 60
+                            ? "text-fg-primary"
+                            : "text-status-error";
                     return (
                       <tr key={row.code}>
                         <td className="py-2.5 pr-4 font-medium text-fg-primary">
@@ -430,6 +441,11 @@ async function InfluencerTab({ from, to }: { from: Date; to: Date }) {
                         </td>
                         <td className="py-2.5 pr-4 text-right tabular-nums text-status-error">
                           {row.totalCogs > 0 ? formatBRL(row.totalCogs) : "—"}
+                        </td>
+                        <td className={`py-2.5 pr-4 text-right tabular-nums font-medium ${costPctColor}`}>
+                          {row.revenueWithCogs > 0
+                            ? formatPercent(row.costPct, 1)
+                            : "—"}
                         </td>
                         <td
                           className={`py-2.5 pr-4 text-right tabular-nums font-medium ${
@@ -468,6 +484,11 @@ async function InfluencerTab({ from, to }: { from: Date; to: Date }) {
                     </td>
                     <td className="py-2.5 pr-4 text-right tabular-nums font-semibold text-status-error">
                       {formatBRL(influencer.totalCogs)}
+                    </td>
+                    <td className="py-2.5 pr-4 text-right tabular-nums font-semibold text-fg-primary">
+                      {influencer.revenueWithCogs > 0
+                        ? formatPercent(influencer.costPct, 1)
+                        : "—"}
                     </td>
                     <td
                       className={`py-2.5 pr-4 text-right tabular-nums font-semibold ${
