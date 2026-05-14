@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  Bar,
+  Area,
   CartesianGrid,
   ComposedChart,
   Line,
@@ -77,6 +77,18 @@ export function YearlyChart({ data }: Props) {
       <div className="h-56 w-full sm:h-72 md:h-80">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id="yearlyProfitFade" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stopColor={COLOR_PROFIT}  stopOpacity={0.32} />
+                <stop offset="60%"  stopColor={COLOR_PROFIT}  stopOpacity={0.08} />
+                <stop offset="100%" stopColor={COLOR_PROFIT}  stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id="yearlyRevenueFade" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stopColor={COLOR_REVENUE} stopOpacity={0.32} />
+                <stop offset="60%"  stopColor={COLOR_REVENUE} stopOpacity={0.08} />
+                <stop offset="100%" stopColor={COLOR_REVENUE} stopOpacity={0} />
+              </linearGradient>
+            </defs>
             <CartesianGrid vertical={false} stroke={COLOR_GRID} />
             <XAxis
               dataKey="label"
@@ -93,15 +105,8 @@ export function YearlyChart({ data }: Props) {
               width={60}
             />
             <Tooltip
-              cursor={{ fill: "rgba(255,255,255,0.04)" }}
+              cursor={{ stroke: COLOR_GRID, strokeWidth: 1 }}
               content={<CustomTooltip mode={mode} />}
-            />
-            <Bar
-              dataKey={cfg.realKey}
-              fill={cfg.color}
-              fillOpacity={0.75}
-              radius={[3, 3, 0, 0]}
-              maxBarSize={40}
             />
             <Line
               type="monotone"
@@ -111,6 +116,20 @@ export function YearlyChart({ data }: Props) {
               strokeDasharray="4 4"
               dot={false}
               activeDot={{ r: 4 }}
+            />
+            <Area
+              key={mode}
+              type="monotone"
+              dataKey={cfg.realKey}
+              stroke={cfg.color}
+              strokeWidth={2.5}
+              fill={`url(#${mode === "profit" ? "yearlyProfitFade" : "yearlyRevenueFade"})`}
+              dot={false}
+              activeDot={{ r: 4 }}
+              connectNulls={false}
+              isAnimationActive
+              animationDuration={1100}
+              animationEasing="ease-out"
             />
           </ComposedChart>
         </ResponsiveContainer>
