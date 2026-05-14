@@ -376,8 +376,8 @@ export async function getInfluencerCouponBreakdown(
       AND (o.discount_codes IS NULL OR o.discount_codes NOT ILIKE '%TROCA%')
       AND (o.discount_codes IS NULL OR o.discount_codes NOT ILIKE '%VOUCHER%')
       AND (o.tags IS NULL OR o.tags NOT ILIKE '%Reenvio%')
-      AND o.created_at >= ${dateFrom}
-      AND o.created_at < ${dateTo}
+      AND o.created_at >= ${dateFrom.toISOString()}::timestamptz
+      AND o.created_at < ${dateTo.toISOString()}::timestamptz
       AND TRIM(c.code) ~* '20$'
     GROUP BY UPPER(TRIM(c.code))
     ORDER BY total_revenue DESC
