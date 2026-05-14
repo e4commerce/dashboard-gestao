@@ -148,6 +148,22 @@ async function processBatch(
   }
 }
 
+// Periods longer than this are split so a single chunk failure or restart
+// doesn't discard all progress. 14 days ≈ ~30s–2min per chunk in practice.
+const CHUNK_DAYS = 14;
+const CHUNK_MS   = CHUNK_DAYS * 24 * 60 * 60 * 1000;
+
+function buildChunks(from: Date, to: Date): Array<{ from: Date; to: Date }> {
+  const chunks: Array<{ from: Date; to: Date }> = [];
+  let cur = from.getTime();
+  while (cur < to.getTime()) {
+    const end = Math.min(cur + CHUNK_MS, to.getTime());
+    chunks.push({ from: new Date(cur), to: new Date(end) });
+    cur = end;
+  }
+  return chunks;
+}
+
 async function executeExtraction(
   logId: number,
   dateFrom: Date,
@@ -161,9 +177,28 @@ async function executeExtraction(
     errorsCount: 0,
   };
 
+  const chunks = buildChunks(dateFrom, dateTo);
+
   try {
-    for await (const page of fetchOrdersPaginated(dateFrom, dateTo)) {
-      await processBatch(page, stats);
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      for await (const page of fetchOrdersPaginated(chunk.from, chunk.to)) {
+        await processBatch(page, stats);
+      }
+      // Flush progress after each chunk so the UI stays up-to-date and a
+      // mid-run restart doesn't erase all evidence of work done so far.
+      if (i < chunks.length - 1) {
+        await db
+          .update(extractionLogs)
+          .set({
+            ordersExtracted: stats.ordersExtracted,
+            ordersNew: stats.ordersNew,
+            ordersSkipped: stats.ordersSkipped,
+            errorsCount: stats.errorsCount,
+            errorMessage: `Chunk ${i + 1}/${chunks.length} concluído`,
+          })
+          .where(eq(extractionLogs.id, logId));
+      }
     }
 
     const durationMs = Date.now() - startedAt;
@@ -175,6 +210,7 @@ async function executeExtraction(
         ordersNew: stats.ordersNew,
         ordersSkipped: stats.ordersSkipped,
         errorsCount: stats.errorsCount,
+        errorMessage: null,
         executionTimeMs: durationMs,
         completedAt: new Date(),
       })
