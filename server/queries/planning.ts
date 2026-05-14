@@ -1,7 +1,9 @@
 import "server-only";
 import { db } from "@/server/db/client";
 import { monthlyGoals, dailyWeights } from "@/server/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, between, eq } from "drizzle-orm";
+import { startOfMonthFromKey, endOfMonthFromKey, toMonthKeySP } from "@/lib/datetime";
+import { getMarginAnalysis } from "./margin";
 
 export type MonthlyGoalRow = {
   month: string;
@@ -75,6 +77,64 @@ export async function upsertDailyWeights(
         set: { weight: w.weight.toString(), updatedAt: new Date() },
       });
   }
+}
+
+const MONTHS_PT_SHORT = [
+  "Jan","Fev","Mar","Abr","Mai","Jun",
+  "Jul","Ago","Set","Out","Nov","Dez",
+];
+
+export type YearlyChartPoint = {
+  month: string;       // "YYYY-MM"
+  label: string;       // "Jan", "Fev", …
+  revenueGoal: number;
+  grossProfitGoal: number;
+  revenueReal: number | null;      // null = mês ainda não ocorreu
+  grossProfitReal: number | null;
+};
+
+export async function getYearlyChartData(year: string): Promise<YearlyChartPoint[]> {
+  const from = startOfMonthFromKey(`${year}-01`);
+  const to   = endOfMonthFromKey(`${year}-12`);
+  const currentMonth = toMonthKeySP(new Date());
+
+  const [goalRows, margin] = await Promise.all([
+    db.select()
+      .from(monthlyGoals)
+      .where(between(monthlyGoals.month, `${year}-01`, `${year}-12`)),
+    getMarginAnalysis(from, to),
+  ]);
+
+  const goalMap = new Map<string, { revenueGoal: number; grossProfitGoal: number }>();
+  for (const r of goalRows) {
+    goalMap.set(r.month, {
+      revenueGoal: Number(r.revenueGoal),
+      grossProfitGoal: Number(r.grossProfitGoal),
+    });
+  }
+
+  const revenueByMonth = new Map<string, number>();
+  const profitByMonth  = new Map<string, number>();
+  for (const p of margin.daily) {
+    const m = p.date.slice(0, 7);
+    revenueByMonth.set(m, (revenueByMonth.get(m) ?? 0) + p.faturamento);
+    profitByMonth.set(m,  (profitByMonth.get(m)  ?? 0) + p.operationalProfit);
+  }
+
+  return Array.from({ length: 12 }, (_, i) => {
+    const mm    = String(i + 1).padStart(2, "0");
+    const month = `${year}-${mm}`;
+    const isFuture = month > currentMonth;
+    const g = goalMap.get(month);
+    return {
+      month,
+      label: MONTHS_PT_SHORT[i],
+      revenueGoal:      g?.revenueGoal      ?? 0,
+      grossProfitGoal:  g?.grossProfitGoal  ?? 0,
+      revenueReal:      isFuture ? null : (revenueByMonth.get(month) ?? 0),
+      grossProfitReal:  isFuture ? null : (profitByMonth.get(month)  ?? 0),
+    };
+  });
 }
 
 export function daysInMonth(month: string): number {

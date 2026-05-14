@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/layout/page-header";
 import { MonthPicker } from "@/components/month-picker";
-import { getMonthlyGoal, getDailyWeights } from "@/server/queries/planning";
+import { YearlyChart } from "@/components/dashboard/yearly-chart";
+import { getMonthlyGoal, getDailyWeights, getYearlyChartData } from "@/server/queries/planning";
 import { parseMonthKey, toMonthKeySP } from "@/lib/datetime";
 import { MonthlyGoalForm } from "./monthly-goal-form";
 import { DailyWeightsGrid } from "./daily-weights-grid";
@@ -24,10 +25,12 @@ export default async function MetasPage({
 }) {
   const params = await searchParams;
   const month = parseMonthKey(params.month) ?? toMonthKeySP(new Date());
+  const year = month.slice(0, 4);
 
-  const [goal, weights] = await Promise.all([
+  const [goal, weights, yearlyData] = await Promise.all([
     getMonthlyGoal(month),
     getDailyWeights(month),
+    getYearlyChartData(year),
   ]);
 
   const revenueGoal = goal?.revenueGoal ?? 0;
@@ -42,6 +45,8 @@ export default async function MetasPage({
         />
         <MonthPicker month={month} />
       </div>
+
+      <YearlyChart data={yearlyData} />
 
       <MonthlyGoalForm
         key={`goal-${month}`}
