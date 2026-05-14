@@ -6,6 +6,8 @@ import { CostsDailyTable } from "@/components/dashboard/costs-daily-table";
 import {
   getCostsOverview,
   getDailyCosts,
+  getInfluencerCouponBreakdown,
+  getInfluencerCouponSummary,
   getInvalidReasonBreakdown,
   type CostGroupSummary,
 } from "@/server/queries/costs";
@@ -62,6 +64,7 @@ function fmtLastSync(d: Date | null): string {
 
 const TABS = [
   { key: "custos", label: "Custos de Produto" },
+  { key: "influencer", label: "Cupons Influencer" },
   { key: "marketing", label: "Marketing" },
 ] as const;
 
@@ -282,6 +285,220 @@ async function CustosTab({ from, to }: { from: Date; to: Date }) {
   );
 }
 
+// ── Influencer tab ────────────────────────────────────────────────────────────
+
+async function InfluencerTab({ from, to }: { from: Date; to: Date }) {
+  const [influencer, influencerByCode, overview] = await Promise.all([
+    getInfluencerCouponSummary(from, to),
+    getInfluencerCouponBreakdown(from, to),
+    getCostsOverview(from, to),
+  ]);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <AutoRefreshOnSync channel="cogs" />
+
+      <p className="text-xs text-fg-muted">
+        Pedidos válidos com cupom terminado em &quot;20&quot;. Receita já líquida do
+        desconto aplicado; não inclui comissão paga ao influencer.
+      </p>
+
+      {influencer.totalOrders === 0 ? (
+        <p className="text-xs text-fg-muted">
+          Nenhum pedido com cupom de influencer encontrado no período.
+        </p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <StatCard
+              label="Pedidos"
+              value={influencer.totalOrders.toLocaleString("pt-BR")}
+              sub={`${influencer.coveragePct.toFixed(0)}% com COGS`}
+            />
+            <StatCard label="Receita" value={formatBRL(influencer.totalRevenue)} />
+            <StatCard
+              label="Custo de produto"
+              value={formatBRL(influencer.totalCogs)}
+              sub={
+                influencer.revenueWithCogs > 0
+                  ? `${formatPercent(influencer.costPct, 1)} da receita`
+                  : "—"
+              }
+              accent="negative"
+            />
+            <StatCard
+              label="Lucro bruto"
+              value={formatBRL(influencer.grossProfit)}
+              sub={
+                influencer.revenueWithCogs > 0
+                  ? `${formatPercent(influencer.grossMargin, 1)} margem`
+                  : "—"
+              }
+              accent={
+                influencer.grossProfit <= 0
+                  ? "negative"
+                  : influencer.grossMargin >= 40
+                    ? "positive"
+                    : "neutral"
+              }
+            />
+            <StatCard
+              label="Ticket médio"
+              value={
+                influencer.totalOrders > 0
+                  ? formatBRL(influencer.totalRevenue / influencer.totalOrders)
+                  : "—"
+              }
+            />
+            <StatCard
+              label="vs. válidos sem cupom"
+              value={
+                overview.valid.costPct > 0 && influencer.revenueWithCogs > 0
+                  ? `${(influencer.costPct - overview.valid.costPct).toFixed(1)}pp`
+                  : "—"
+              }
+              sub="diferença em % de custo"
+              accent={
+                influencer.revenueWithCogs > 0 && overview.valid.costPct > 0
+                  ? influencer.costPct > overview.valid.costPct
+                    ? "negative"
+                    : "positive"
+                  : "neutral"
+              }
+            />
+          </div>
+
+          <section className="flex flex-col gap-4 rounded-lg border border-border-default bg-surface-card p-4 md:p-6">
+            <div>
+              <h3 className="text-sm font-semibold text-fg-primary">Por cupom</h3>
+              <p className="text-xs text-fg-muted">
+                Ordenado por receita. Cobertura indica a fração de pedidos do cupom com
+                COGS sincronizado da DSers.
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border-subtle text-left">
+                    <th className="pb-2 pr-4 font-medium text-fg-muted">Cupom</th>
+                    <th className="pb-2 pr-4 text-right font-medium text-fg-muted">
+                      Pedidos
+                    </th>
+                    <th className="pb-2 pr-4 text-right font-medium text-fg-muted">
+                      Cobertura
+                    </th>
+                    <th className="pb-2 pr-4 text-right font-medium text-fg-muted">
+                      Receita
+                    </th>
+                    <th className="pb-2 pr-4 text-right font-medium text-fg-muted">
+                      COGS
+                    </th>
+                    <th className="pb-2 pr-4 text-right font-medium text-fg-muted">
+                      Lucro bruto
+                    </th>
+                    <th className="pb-2 pr-4 text-right font-medium text-fg-muted">
+                      Margem
+                    </th>
+                    <th className="pb-2 text-right font-medium text-fg-muted">
+                      Ticket médio
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-subtle">
+                  {influencerByCode.map((row) => {
+                    const marginColor =
+                      row.revenueWithCogs === 0
+                        ? "text-fg-muted"
+                        : row.grossMargin >= 40
+                          ? "text-status-success"
+                          : row.grossMargin >= 20
+                            ? "text-fg-primary"
+                            : "text-status-error";
+                    return (
+                      <tr key={row.code}>
+                        <td className="py-2.5 pr-4 font-medium text-fg-primary">
+                          {row.code}
+                        </td>
+                        <td className="py-2.5 pr-4 text-right tabular-nums text-fg-secondary">
+                          {row.orderCount.toLocaleString("pt-BR")}
+                        </td>
+                        <td className="py-2.5 pr-4 text-right tabular-nums text-fg-secondary">
+                          {row.coveragePct.toFixed(0)}%
+                        </td>
+                        <td className="py-2.5 pr-4 text-right tabular-nums font-medium text-fg-primary">
+                          {formatBRL(row.totalRevenue)}
+                        </td>
+                        <td className="py-2.5 pr-4 text-right tabular-nums text-status-error">
+                          {row.totalCogs > 0 ? formatBRL(row.totalCogs) : "—"}
+                        </td>
+                        <td
+                          className={`py-2.5 pr-4 text-right tabular-nums font-medium ${
+                            row.revenueWithCogs === 0
+                              ? "text-fg-muted"
+                              : row.grossProfit >= 0
+                                ? "text-status-success"
+                                : "text-status-error"
+                          }`}
+                        >
+                          {row.revenueWithCogs > 0 ? formatBRL(row.grossProfit) : "—"}
+                        </td>
+                        <td className={`py-2.5 pr-4 text-right tabular-nums font-medium ${marginColor}`}>
+                          {row.revenueWithCogs > 0
+                            ? formatPercent(row.grossMargin, 1)
+                            : "—"}
+                        </td>
+                        <td className="py-2.5 text-right tabular-nums text-fg-secondary">
+                          {formatBRL(row.avgTicket)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  <tr className="border-t border-border-default">
+                    <td className="py-2.5 pr-4 font-semibold text-fg-primary">
+                      Total
+                    </td>
+                    <td className="py-2.5 pr-4 text-right tabular-nums font-semibold text-fg-primary">
+                      {influencer.totalOrders.toLocaleString("pt-BR")}
+                    </td>
+                    <td className="py-2.5 pr-4 text-right tabular-nums font-semibold text-fg-primary">
+                      {influencer.coveragePct.toFixed(0)}%
+                    </td>
+                    <td className="py-2.5 pr-4 text-right tabular-nums font-semibold text-fg-primary">
+                      {formatBRL(influencer.totalRevenue)}
+                    </td>
+                    <td className="py-2.5 pr-4 text-right tabular-nums font-semibold text-status-error">
+                      {formatBRL(influencer.totalCogs)}
+                    </td>
+                    <td
+                      className={`py-2.5 pr-4 text-right tabular-nums font-semibold ${
+                        influencer.grossProfit >= 0
+                          ? "text-status-success"
+                          : "text-status-error"
+                      }`}
+                    >
+                      {formatBRL(influencer.grossProfit)}
+                    </td>
+                    <td className="py-2.5 pr-4 text-right tabular-nums font-semibold text-fg-primary">
+                      {influencer.revenueWithCogs > 0
+                        ? formatPercent(influencer.grossMargin, 1)
+                        : "—"}
+                    </td>
+                    <td className="py-2.5 text-right tabular-nums font-semibold text-fg-primary">
+                      {influencer.totalOrders > 0
+                        ? formatBRL(influencer.totalRevenue / influencer.totalOrders)
+                        : "—"}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Marketing tab ─────────────────────────────────────────────────────────────
 
 async function MarketingTab({ from, to }: { from: Date; to: Date }) {
@@ -401,7 +618,11 @@ export default async function DadosPage({
 }) {
   const params = await searchParams;
   const activeTab: Tab =
-    params.tab === "marketing" ? "marketing" : "custos";
+    params.tab === "marketing"
+      ? "marketing"
+      : params.tab === "influencer"
+        ? "influencer"
+        : "custos";
   const month = parseMonthKey(params.month) ?? toMonthKeySP(new Date());
   const from = startOfMonthFromKey(month);
   const to = endOfMonthFromKey(month);
@@ -417,6 +638,8 @@ export default async function DadosPage({
 
       {activeTab === "custos" ? (
         <CustosTab from={from} to={to} />
+      ) : activeTab === "influencer" ? (
+        <InfluencerTab from={from} to={to} />
       ) : (
         <MarketingTab from={from} to={to} />
       )}
