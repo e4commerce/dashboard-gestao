@@ -1,15 +1,21 @@
 import "server-only";
 import { getMarginAnalysis } from "./margin";
 import { getDailyMetrics } from "./dashboard";
+import { getDailyAdSpend } from "./ads";
 import {
   buildWeightMap,
   getDailyWeights,
   getMonthlyGoal,
 } from "./planning";
+import { validOrder } from "./order-filters";
 import { toMonthKeySP } from "@/lib/datetime";
 import { db } from "@/server/db/client";
-import { dailySessions } from "@/server/db/schema";
-import { and, gte, lte } from "drizzle-orm";
+import {
+  dailySessions,
+  orders,
+  orderAttribution,
+} from "@/server/db/schema";
+import { and, eq, gte, lt, lte, sql } from "drizzle-orm";
 
 export type DailyPerformancePoint = {
   date: string;
@@ -259,4 +265,145 @@ export async function getPerformanceAnalysis(
   };
 
   return { daily, totals };
+}
+
+// ─── Vendas por canal (UTM) ──────────────────────────────────────────────────
+
+export type SalesByChannelRow = {
+  channel: string;          // channelName consolidado pelo classificador UTM
+  orderCount: number;       // pedidos válidos atribuídos ao canal
+  revenue: number;          // faturamento total no canal
+  revenuePct: number;       // participação no faturamento total do período
+  avgTicket: number;        // faturamento / pedidos
+  // Margem bruta = (revenueWithCogs - cogs) / revenueWithCogs. Só considera
+  // pedidos com COGS sincronizado, pra evitar margem "infiada" por pedidos
+  // ainda não custeados.
+  revenueWithCogs: number;
+  cogs: number;
+  grossProfit: number;
+  grossMargin: number | null;
+  coveragePct: number;      // % de pedidos do canal com COGS sincronizado
+  // Marketing pago atribuído ao canal: Meta → "Meta", Google → "Google".
+  // null para canais sem mídia paga rastreada.
+  adSpend: number | null;
+  roas: number | null;      // revenue / adSpend
+  cpa: number | null;       // adSpend / orderCount
+};
+
+export type SalesByChannelTotals = {
+  orderCount: number;
+  revenue: number;
+  revenueWithCogs: number;
+  cogs: number;
+  grossProfit: number;
+  grossMargin: number | null;
+  coveragePct: number;
+  adSpend: number;
+  roas: number | null;
+  cpa: number | null;
+  avgTicket: number;
+};
+
+export type SalesByChannelAnalysis = {
+  rows: SalesByChannelRow[];
+  totals: SalesByChannelTotals;
+};
+
+// Canais com gasto pago rastreado pela plataforma de ads — usado pra atribuir
+// adSpend/ROAS/CPA. Demais canais aparecem com null nessas colunas.
+const PAID_CHANNEL_KEYS = new Set(["Meta", "Google"]);
+
+export async function getSalesByChannel(
+  dateFrom: Date,
+  dateTo: Date,
+): Promise<SalesByChannelAnalysis> {
+  // channelName pode ser nulo (pedidos antigos sem attribution ainda) — caímos
+  // em "Sem atribuição" pra não esconder receita.
+  const channelExpr = sql<string>`COALESCE(${orderAttribution.channelName}, 'Sem atribuição')`;
+
+  const [channelRows, ads] = await Promise.all([
+    db
+      .select({
+        channel: channelExpr,
+        orderCount: sql<number>`COUNT(*)::int`,
+        revenue: sql<number>`COALESCE(SUM(${orders.totalPrice}), 0)::float`,
+        ordersWithCogs: sql<number>`COUNT(*) FILTER (WHERE ${orders.cogsAmount} > 0)::int`,
+        revenueWithCogs: sql<number>`COALESCE(SUM(${orders.totalPrice}) FILTER (WHERE ${orders.cogsAmount} > 0), 0)::float`,
+        cogs: sql<number>`COALESCE(SUM(${orders.cogsAmount}) FILTER (WHERE ${orders.cogsAmount} > 0), 0)::float`,
+      })
+      .from(orders)
+      .leftJoin(orderAttribution, eq(orderAttribution.orderId, orders.id))
+      .where(
+        and(validOrder, gte(orders.createdAt, dateFrom), lt(orders.createdAt, dateTo)),
+      )
+      .groupBy(channelExpr),
+    getDailyAdSpend(dateFrom, dateTo),
+  ]);
+
+  let metaSpend = 0;
+  let googleSpend = 0;
+  for (const a of ads) {
+    metaSpend += a.meta.spend;
+    googleSpend += a.google.spend;
+  }
+  const spendByChannel = new Map<string, number>([
+    ["Meta", metaSpend],
+    ["Google", googleSpend],
+  ]);
+
+  const totalRevenue = channelRows.reduce((s, r) => s + r.revenue, 0);
+
+  const rows: SalesByChannelRow[] = channelRows.map((r) => {
+    const grossProfit = r.revenueWithCogs - r.cogs;
+    const grossMargin =
+      r.revenueWithCogs > 0 ? (grossProfit / r.revenueWithCogs) * 100 : null;
+    const isPaid = PAID_CHANNEL_KEYS.has(r.channel);
+    const adSpend = isPaid ? spendByChannel.get(r.channel) ?? 0 : null;
+    return {
+      channel: r.channel,
+      orderCount: r.orderCount,
+      revenue: r.revenue,
+      revenuePct: totalRevenue > 0 ? (r.revenue / totalRevenue) * 100 : 0,
+      avgTicket: r.orderCount > 0 ? r.revenue / r.orderCount : 0,
+      revenueWithCogs: r.revenueWithCogs,
+      cogs: r.cogs,
+      grossProfit,
+      grossMargin,
+      coveragePct:
+        r.orderCount > 0 ? (r.ordersWithCogs / r.orderCount) * 100 : 0,
+      adSpend,
+      roas: adSpend && adSpend > 0 ? r.revenue / adSpend : null,
+      cpa: adSpend && adSpend > 0 && r.orderCount > 0 ? adSpend / r.orderCount : null,
+    };
+  });
+
+  rows.sort((a, b) => b.revenue - a.revenue);
+
+  const sumOrders = rows.reduce((s, r) => s + r.orderCount, 0);
+  const sumRevenue = rows.reduce((s, r) => s + r.revenue, 0);
+  const sumRevenueWithCogs = rows.reduce((s, r) => s + r.revenueWithCogs, 0);
+  const sumCogs = rows.reduce((s, r) => s + r.cogs, 0);
+  const sumGrossProfit = sumRevenueWithCogs - sumCogs;
+  const sumOrdersWithCogs = channelRows.reduce(
+    (s, r) => s + r.ordersWithCogs,
+    0,
+  );
+  const sumAdSpend = metaSpend + googleSpend;
+
+  const totals: SalesByChannelTotals = {
+    orderCount: sumOrders,
+    revenue: sumRevenue,
+    revenueWithCogs: sumRevenueWithCogs,
+    cogs: sumCogs,
+    grossProfit: sumGrossProfit,
+    grossMargin:
+      sumRevenueWithCogs > 0 ? (sumGrossProfit / sumRevenueWithCogs) * 100 : null,
+    coveragePct: sumOrders > 0 ? (sumOrdersWithCogs / sumOrders) * 100 : 0,
+    adSpend: sumAdSpend,
+    roas: sumAdSpend > 0 ? sumRevenue / sumAdSpend : null,
+    cpa: sumAdSpend > 0 && sumOrders > 0 ? sumAdSpend / sumOrders : null,
+    avgTicket: sumOrders > 0 ? sumRevenue / sumOrders : 0,
+  };
+
+  return { rows, totals };
 }

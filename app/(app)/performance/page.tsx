@@ -1,7 +1,11 @@
 import { PageHeader } from "@/components/layout/page-header";
 import { MonthPicker } from "@/components/month-picker";
 import { ExportCsvButton } from "./export-csv-button";
-import { getPerformanceAnalysis } from "@/server/queries/performance";
+import { SalesByChannelTable } from "./sales-by-channel-table";
+import {
+  getPerformanceAnalysis,
+  getSalesByChannel,
+} from "@/server/queries/performance";
 import {
   parseMonthKey,
   toMonthKeySP,
@@ -91,7 +95,10 @@ export default async function PerformancePage({
   const from = startOfMonthFromKey(month);
   const to = endOfMonthFromKey(month);
 
-  const { daily, totals } = await getPerformanceAnalysis(from, to);
+  const [{ daily, totals }, salesByChannel] = await Promise.all([
+    getPerformanceAnalysis(from, to),
+    getSalesByChannel(from, to),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -306,6 +313,9 @@ export default async function PerformancePage({
           </table>
         </div>
       </section>
+
+      {/* ── Análise por canal (UTM) ── */}
+      <SalesByChannelTable data={salesByChannel} />
     </div>
   );
 }
