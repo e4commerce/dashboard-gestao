@@ -41,8 +41,14 @@ async function processBatch(
         sourceName: node.sourceName,
         firstVisitSource: firstVisit?.source,
         lastVisitSource: lastVisit?.source,
-        utmMedium: lastUtm?.medium ?? firstUtm?.medium ?? null,
-        utmCampaign: lastUtm?.campaign ?? firstUtm?.campaign ?? null,
+        firstVisitUtmSource: firstUtm?.source,
+        lastVisitUtmSource: lastUtm?.source,
+        firstVisitUtmMedium: firstUtm?.medium,
+        lastVisitUtmMedium: lastUtm?.medium,
+        firstVisitUtmCampaign: firstUtm?.campaign,
+        lastVisitUtmCampaign: lastUtm?.campaign,
+        firstVisitReferrerUrl: firstVisit?.referrerUrl,
+        lastVisitReferrerUrl: lastVisit?.referrerUrl,
       });
 
       const discountCodesStr =

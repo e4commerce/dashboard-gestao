@@ -1,5 +1,10 @@
 import "server-only";
-import { getMarginAnalysis } from "./margin";
+import {
+  getMarginAnalysis,
+  REVENUE_TAX_RATE,
+  CHECKOUT_FEE_RATE,
+} from "./margin";
+import { getDailyCosts } from "./costs";
 import { getDailyMetrics } from "./dashboard";
 import { getDailyAdSpend } from "./ads";
 import {
@@ -14,8 +19,15 @@ import {
   dailySessions,
   orders,
   orderAttribution,
+  utmParameters,
 } from "@/server/db/schema";
 import { and, eq, gte, lt, lte, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+import {
+  getConsolidatedChannel,
+  type ConsolidatedChannel,
+  type TouchModel,
+} from "@/server/etl/channels";
 
 export type DailyPerformancePoint = {
   date: string;
@@ -270,38 +282,56 @@ export async function getPerformanceAnalysis(
 // ─── Vendas por canal (UTM) ──────────────────────────────────────────────────
 
 export type SalesByChannelRow = {
-  channel: string;          // channelName consolidado pelo classificador UTM
+  channel: ConsolidatedChannel; // canal consolidado pelo classificador UTM
   orderCount: number;       // pedidos válidos atribuídos ao canal
   revenue: number;          // faturamento total no canal
   revenuePct: number;       // participação no faturamento total do período
   avgTicket: number;        // faturamento / pedidos
-  // Margem bruta = (revenueWithCogs - cogs) / revenueWithCogs. Só considera
-  // pedidos com COGS sincronizado, pra evitar margem "infiada" por pedidos
-  // ainda não custeados.
-  revenueWithCogs: number;
-  cogs: number;
-  grossProfit: number;
-  grossMargin: number | null;
+  // ── COGS ──────────────────────────────────────────────────────────────────
+  // cogsReal = soma de cogs_amount dos pedidos sincronizados (cogs > 0).
+  // cogsEstimated = receita_não_sincronizada × taxa_média_de_cogs do período.
+  // A taxa é a mesma usada na análise de margem (sum.cogs / sum.revenueWithCogs).
+  cogsReal: number;
+  cogsEstimated: number;
+  cogsTotal: number;        // cogsReal + cogsEstimated
   coveragePct: number;      // % de pedidos do canal com COGS sincronizado
-  // Marketing pago atribuído ao canal: Meta → "Meta", Google → "Google".
-  // null para canais sem mídia paga rastreada.
+  // ── Marketing pago ─────────────────────────────────────────────────────────
+  // Atribuído ao canal: Meta→"Meta", Google→"Google". null nos demais canais.
   adSpend: number | null;
-  roas: number | null;      // revenue / adSpend
-  cpa: number | null;       // adSpend / orderCount
+  roas: number | null;
+  cpa: number | null;
+  // ── Demais taxas/fees ─────────────────────────────────────────────────────
+  // gatewayFee é a taxa MP do período rateada pela participação no faturamento.
+  // revenueTax e checkoutFee são percentuais fixos sobre o faturamento do canal.
+  gatewayFee: number;
+  revenueTax: number;
+  checkoutFee: number;
+  feesTotal: number;        // gatewayFee + revenueTax + checkoutFee
+  // ── Lucro de performance ──────────────────────────────────────────────────
+  // = faturamento − cogsTotal − adSpend − feesTotal. Mesma fórmula da página
+  // de margem, mas atribuída por canal. cogsInvalid (reenvio/troca/voucher/zerado)
+  // é operacional e não entra aqui.
+  performanceProfit: number;
+  performanceMargin: number;
 };
 
 export type SalesByChannelTotals = {
   orderCount: number;
   revenue: number;
-  revenueWithCogs: number;
-  cogs: number;
-  grossProfit: number;
-  grossMargin: number | null;
+  avgTicket: number;
+  cogsReal: number;
+  cogsEstimated: number;
+  cogsTotal: number;
   coveragePct: number;
   adSpend: number;
   roas: number | null;
   cpa: number | null;
-  avgTicket: number;
+  gatewayFee: number;
+  revenueTax: number;
+  checkoutFee: number;
+  feesTotal: number;
+  performanceProfit: number;
+  performanceMargin: number;
 };
 
 export type SalesByChannelAnalysis = {
@@ -311,98 +341,242 @@ export type SalesByChannelAnalysis = {
 
 // Canais com gasto pago rastreado pela plataforma de ads — usado pra atribuir
 // adSpend/ROAS/CPA. Demais canais aparecem com null nessas colunas.
-const PAID_CHANNEL_KEYS = new Set(["Meta", "Google"]);
+const PAID_CHANNEL_KEYS = new Set<ConsolidatedChannel>(["Meta", "Google"]);
+
+// Ordem fixa de exibição. Canais sem pedidos no período somem da tabela.
+const CHANNEL_DISPLAY_ORDER: ConsolidatedChannel[] = [
+  "Meta",
+  "Google",
+  "Klaviyo-Inlead",
+  "WhatsApp",
+  "Grupo VIP",
+  "TikTok",
+  "FoxAppy",
+  "Direct",
+];
 
 export async function getSalesByChannel(
   dateFrom: Date,
   dateTo: Date,
+  touchModel: TouchModel = "last_touch",
 ): Promise<SalesByChannelAnalysis> {
-  // channelName pode ser nulo (pedidos antigos sem attribution ainda) — caímos
-  // em "Sem atribuição" pra não esconder receita.
-  const channelExpr = sql<string>`COALESCE(${orderAttribution.channelName}, 'Sem atribuição')`;
+  // Re-classificamos cada pedido aqui em vez de confiar em order_attribution.
+  // channel_name foi populado pela versão antiga do classificador e está
+  // defasado (não olhava utm_source). Buscamos os dados crus + UTMs e
+  // rodamos o classificador novo por pedido.
+  const firstUtm = alias(utmParameters, "first_utm");
+  const lastUtm = alias(utmParameters, "last_utm");
 
-  const [channelRows, ads] = await Promise.all([
+  const [orderRows, ads, dailyCosts] = await Promise.all([
     db
       .select({
-        channel: channelExpr,
-        orderCount: sql<number>`COUNT(*)::int`,
-        revenue: sql<number>`COALESCE(SUM(${orders.totalPrice}), 0)::float`,
-        ordersWithCogs: sql<number>`COUNT(*) FILTER (WHERE ${orders.cogsAmount} > 0)::int`,
-        revenueWithCogs: sql<number>`COALESCE(SUM(${orders.totalPrice}) FILTER (WHERE ${orders.cogsAmount} > 0), 0)::float`,
-        cogs: sql<number>`COALESCE(SUM(${orders.cogsAmount}) FILTER (WHERE ${orders.cogsAmount} > 0), 0)::float`,
+        revenue: sql<number>`${orders.totalPrice}::float`,
+        cogsAmount: sql<number>`COALESCE(${orders.cogsAmount}, 0)::float`,
+        firstVisitSource: orderAttribution.firstVisitSource,
+        lastVisitSource: orderAttribution.lastVisitSource,
+        firstVisitReferrerUrl: orderAttribution.firstVisitReferrerUrl,
+        lastVisitReferrerUrl: orderAttribution.lastVisitReferrerUrl,
+        firstUtmSource: firstUtm.utmSource,
+        firstUtmMedium: firstUtm.utmMedium,
+        firstUtmCampaign: firstUtm.utmCampaign,
+        lastUtmSource: lastUtm.utmSource,
+        lastUtmMedium: lastUtm.utmMedium,
+        lastUtmCampaign: lastUtm.utmCampaign,
       })
       .from(orders)
       .leftJoin(orderAttribution, eq(orderAttribution.orderId, orders.id))
+      .leftJoin(
+        firstUtm,
+        and(eq(firstUtm.orderId, orders.id), eq(firstUtm.visitType, "first_visit")),
+      )
+      .leftJoin(
+        lastUtm,
+        and(eq(lastUtm.orderId, orders.id), eq(lastUtm.visitType, "last_visit")),
+      )
       .where(
         and(validOrder, gte(orders.createdAt, dateFrom), lt(orders.createdAt, dateTo)),
-      )
-      .groupBy(channelExpr),
+      ),
     getDailyAdSpend(dateFrom, dateTo),
+    getDailyCosts(dateFrom, dateTo),
   ]);
 
+  // Marketing pago: Meta/Google total no período.
   let metaSpend = 0;
   let googleSpend = 0;
   for (const a of ads) {
     metaSpend += a.meta.spend;
     googleSpend += a.google.spend;
   }
-  const spendByChannel = new Map<string, number>([
+  const spendByChannel = new Map<ConsolidatedChannel, number>([
     ["Meta", metaSpend],
     ["Google", googleSpend],
   ]);
 
-  const totalRevenue = channelRows.reduce((s, r) => s + r.revenue, 0);
+  // Taxa de COGS do período (sum cogs / sum receita-com-cogs) — usada pra
+  // estimar o COGS dos pedidos não-sincronizados de cada canal.
+  let periodCogs = 0;
+  let periodRevenueWithCogs = 0;
+  let periodGatewayFee = 0;
+  for (const c of dailyCosts) {
+    periodCogs += c.validCogs;
+    periodRevenueWithCogs += c.validRevenue;
+    periodGatewayFee += c.mpFee;
+  }
+  const cogsRate =
+    periodRevenueWithCogs > 0 ? periodCogs / periodRevenueWithCogs : 0;
 
-  const rows: SalesByChannelRow[] = channelRows.map((r) => {
-    const grossProfit = r.revenueWithCogs - r.cogs;
-    const grossMargin =
-      r.revenueWithCogs > 0 ? (grossProfit / r.revenueWithCogs) * 100 : null;
-    const isPaid = PAID_CHANNEL_KEYS.has(r.channel);
-    const adSpend = isPaid ? spendByChannel.get(r.channel) ?? 0 : null;
+  // Agrega pedidos por canal classificado.
+  type ChannelAgg = {
+    orderCount: number;
+    revenue: number;
+    ordersWithCogs: number;
+    revenueWithCogs: number;
+    cogs: number;
+  };
+  const byChannel = new Map<ConsolidatedChannel, ChannelAgg>();
+
+  for (const r of orderRows) {
+    const channel = getConsolidatedChannel(
+      {
+        firstVisitSource: r.firstVisitSource,
+        lastVisitSource: r.lastVisitSource,
+        firstVisitUtmSource: r.firstUtmSource,
+        firstVisitUtmMedium: r.firstUtmMedium,
+        firstVisitUtmCampaign: r.firstUtmCampaign,
+        lastVisitUtmSource: r.lastUtmSource,
+        lastVisitUtmMedium: r.lastUtmMedium,
+        lastVisitUtmCampaign: r.lastUtmCampaign,
+        firstVisitReferrerUrl: r.firstVisitReferrerUrl,
+        lastVisitReferrerUrl: r.lastVisitReferrerUrl,
+      },
+      touchModel,
+    );
+
+    const agg = byChannel.get(channel) ?? {
+      orderCount: 0,
+      revenue: 0,
+      ordersWithCogs: 0,
+      revenueWithCogs: 0,
+      cogs: 0,
+    };
+    agg.orderCount += 1;
+    agg.revenue += r.revenue;
+    if (r.cogsAmount > 0) {
+      agg.ordersWithCogs += 1;
+      agg.revenueWithCogs += r.revenue;
+      agg.cogs += r.cogsAmount;
+    }
+    byChannel.set(channel, agg);
+  }
+
+  const totalRevenue = [...byChannel.values()].reduce(
+    (s, r) => s + r.revenue,
+    0,
+  );
+
+  const channelEntries: Array<{ channel: ConsolidatedChannel; agg: ChannelAgg }> =
+    CHANNEL_DISPLAY_ORDER.filter((c) => byChannel.has(c)).map((c) => ({
+      channel: c,
+      agg: byChannel.get(c)!,
+    }));
+
+  const rows: SalesByChannelRow[] = channelEntries.map(({ channel, agg }) => {
+    const unsyncedRevenue = Math.max(0, agg.revenue - agg.revenueWithCogs);
+    const cogsEstimated = unsyncedRevenue * cogsRate;
+    const cogsTotal = agg.cogs + cogsEstimated;
+
+    const isPaid = PAID_CHANNEL_KEYS.has(channel);
+    const adSpend = isPaid ? spendByChannel.get(channel) ?? 0 : null;
+
+    const revenueTax = agg.revenue * REVENUE_TAX_RATE;
+    const checkoutFee = agg.revenue * CHECKOUT_FEE_RATE;
+    // Rateia o gateway fee do período pela participação do canal no faturamento
+    // total dos canais — boa aproximação porque a quase totalidade dos pedidos
+    // passa pelo MP e a taxa/receita varia pouco entre canais.
+    const revenueShare = totalRevenue > 0 ? agg.revenue / totalRevenue : 0;
+    const gatewayFee = periodGatewayFee * revenueShare;
+    const feesTotal = gatewayFee + revenueTax + checkoutFee;
+
+    const adSpendValue = adSpend ?? 0;
+    const performanceProfit =
+      agg.revenue - cogsTotal - adSpendValue - feesTotal;
+    const performanceMargin =
+      agg.revenue > 0 ? (performanceProfit / agg.revenue) * 100 : 0;
+
     return {
-      channel: r.channel,
-      orderCount: r.orderCount,
-      revenue: r.revenue,
-      revenuePct: totalRevenue > 0 ? (r.revenue / totalRevenue) * 100 : 0,
-      avgTicket: r.orderCount > 0 ? r.revenue / r.orderCount : 0,
-      revenueWithCogs: r.revenueWithCogs,
-      cogs: r.cogs,
-      grossProfit,
-      grossMargin,
+      channel,
+      orderCount: agg.orderCount,
+      revenue: agg.revenue,
+      revenuePct: totalRevenue > 0 ? (agg.revenue / totalRevenue) * 100 : 0,
+      avgTicket: agg.orderCount > 0 ? agg.revenue / agg.orderCount : 0,
+      cogsReal: agg.cogs,
+      cogsEstimated,
+      cogsTotal,
       coveragePct:
-        r.orderCount > 0 ? (r.ordersWithCogs / r.orderCount) * 100 : 0,
+        agg.orderCount > 0 ? (agg.ordersWithCogs / agg.orderCount) * 100 : 0,
       adSpend,
-      roas: adSpend && adSpend > 0 ? r.revenue / adSpend : null,
-      cpa: adSpend && adSpend > 0 && r.orderCount > 0 ? adSpend / r.orderCount : null,
+      roas: adSpend && adSpend > 0 ? agg.revenue / adSpend : null,
+      cpa:
+        adSpend && adSpend > 0 && agg.orderCount > 0
+          ? adSpend / agg.orderCount
+          : null,
+      gatewayFee,
+      revenueTax,
+      checkoutFee,
+      feesTotal,
+      performanceProfit,
+      performanceMargin,
     };
   });
 
   rows.sort((a, b) => b.revenue - a.revenue);
 
-  const sumOrders = rows.reduce((s, r) => s + r.orderCount, 0);
-  const sumRevenue = rows.reduce((s, r) => s + r.revenue, 0);
-  const sumRevenueWithCogs = rows.reduce((s, r) => s + r.revenueWithCogs, 0);
-  const sumCogs = rows.reduce((s, r) => s + r.cogs, 0);
-  const sumGrossProfit = sumRevenueWithCogs - sumCogs;
-  const sumOrdersWithCogs = channelRows.reduce(
-    (s, r) => s + r.ordersWithCogs,
+  const sum = rows.reduce(
+    (acc, r) => {
+      acc.orderCount += r.orderCount;
+      acc.revenue += r.revenue;
+      acc.cogsReal += r.cogsReal;
+      acc.cogsEstimated += r.cogsEstimated;
+      acc.cogsTotal += r.cogsTotal;
+      acc.adSpend += r.adSpend ?? 0;
+      acc.gatewayFee += r.gatewayFee;
+      acc.revenueTax += r.revenueTax;
+      acc.checkoutFee += r.checkoutFee;
+      acc.feesTotal += r.feesTotal;
+      acc.performanceProfit += r.performanceProfit;
+      return acc;
+    },
+    {
+      orderCount: 0,
+      revenue: 0,
+      cogsReal: 0,
+      cogsEstimated: 0,
+      cogsTotal: 0,
+      adSpend: 0,
+      gatewayFee: 0,
+      revenueTax: 0,
+      checkoutFee: 0,
+      feesTotal: 0,
+      performanceProfit: 0,
+    },
+  );
+  const sumOrdersWithCogs = channelEntries.reduce(
+    (s, e) => s + e.agg.ordersWithCogs,
     0,
   );
-  const sumAdSpend = metaSpend + googleSpend;
 
   const totals: SalesByChannelTotals = {
-    orderCount: sumOrders,
-    revenue: sumRevenue,
-    revenueWithCogs: sumRevenueWithCogs,
-    cogs: sumCogs,
-    grossProfit: sumGrossProfit,
-    grossMargin:
-      sumRevenueWithCogs > 0 ? (sumGrossProfit / sumRevenueWithCogs) * 100 : null,
-    coveragePct: sumOrders > 0 ? (sumOrdersWithCogs / sumOrders) * 100 : 0,
-    adSpend: sumAdSpend,
-    roas: sumAdSpend > 0 ? sumRevenue / sumAdSpend : null,
-    cpa: sumAdSpend > 0 && sumOrders > 0 ? sumAdSpend / sumOrders : null,
-    avgTicket: sumOrders > 0 ? sumRevenue / sumOrders : 0,
+    ...sum,
+    avgTicket: sum.orderCount > 0 ? sum.revenue / sum.orderCount : 0,
+    coveragePct:
+      sum.orderCount > 0 ? (sumOrdersWithCogs / sum.orderCount) * 100 : 0,
+    roas: sum.adSpend > 0 ? sum.revenue / sum.adSpend : null,
+    cpa:
+      sum.adSpend > 0 && sum.orderCount > 0
+        ? sum.adSpend / sum.orderCount
+        : null,
+    performanceMargin:
+      sum.revenue > 0 ? (sum.performanceProfit / sum.revenue) * 100 : 0,
   };
 
   return { rows, totals };
