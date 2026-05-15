@@ -24,7 +24,7 @@ export const CHECKOUT_FEE_RATE = 0.01;  // taxa de checkout
 // Quando a cobertura DSers do dia está abaixo deste limiar, aplicamos uma
 // taxa estimada (cogs/receita média dos últimos 7 dias com dados) sobre a
 // receita não-sincronizada do dia. Acima do limiar, confiamos só no real.
-const COVERAGE_THRESHOLD_PCT = 96;
+const COVERAGE_THRESHOLD_PCT = 99;
 const ROLLING_WINDOW_DAYS = 7;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 

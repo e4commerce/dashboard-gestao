@@ -151,7 +151,7 @@ export default async function AnaliseMargemPage({
           </h3>
           <p className="text-xs text-fg-muted">
             Lucro = Faturamento − Custo produto − Mídia − Taxas − Custo op. ·
-            Pedidos sem COGS sincronizado e cobertura abaixo de 96% recebem
+            Pedidos sem COGS sincronizado e cobertura abaixo de 99% recebem
             estimativa via taxa média dos últimos 7 dias (marcado com{" "}
             <span className="text-status-warning">~</span>)
           </p>
